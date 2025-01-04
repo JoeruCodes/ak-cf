@@ -1,0 +1,26 @@
+[package]
+name = "cf_ws"
+version = "0.1.0"
+edition = "2021"
+authors = [ "JoeruCodes <joymedi8143@gmail.com>" ]
+
+[package.metadata.release]
+release = false
+
+# https://github.com/rustwasm/wasm-pack/issues/1247
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+worker = { version="0.5.0" }
+worker-macros = { version="0.5.0" }
+console_error_panic_hook = { version = "0.1.1" }
+futures-util = "0.3.31"
+futures = "0.3.31"
+serde = { version = "1.0.216", features = ["derive"] }
+ic-agent = { version = "0.39.1", features = ["wasm-bindgen"] }
+serde_json = "1.0.133"
+candid = "0.10.11"
