@@ -1,4 +1,3 @@
-
 use std::collections::HashSet;
 
 use candid::{Decode, Encode};
@@ -12,7 +11,7 @@ use crate::{Op, OpRequest, UserData};
 #[event(scheduled)]
 async fn cron(event: ScheduledEvent, env: Env, ctx: ScheduleContext) {
     // Initialize the Agent with proper error handling
-    let agent = match Agent::builder().with_url("https://ic0.app").build() {
+    let agent = match Agent::builder().with_url("http://127.0.0.1:4943").build() {
         Ok(a) => a,
         Err(e) => {
             console_log!("Failed to build Agent: {}", e);
@@ -27,7 +26,7 @@ async fn cron(event: ScheduledEvent, env: Env, ctx: ScheduleContext) {
     }
 
     // Parse the canister ID with error handling
-    let canister_id = match Principal::from_text("himj5-jiaaa-aaaag-atuna-cai") {
+    let canister_id = match Principal::from_text("bkyz2-fmaaa-aaaaa-qaaaq-cai") {
         Ok(id) => id,
         Err(e) => {
             console_log!("Invalid canister ID: {}", e);
@@ -90,20 +89,17 @@ async fn cron(event: ScheduledEvent, env: Env, ctx: ScheduleContext) {
                 }
             };
 
+            let op_request = OpRequest { op: Op::GetData };
 
-            let op_request = OpRequest {
-                op: Op::GetData,
-            };
-        
             // Serialize the OpRequest to JSON
             let op_request_json = match serde_json::to_string(&op_request) {
                 Ok(json) => json,
                 Err(e) => {
                     console_log!("{:?}", e);
-                    return ;
+                    return;
                 }
             };
-        
+
             // Initialize the RequestInit with method, headers, and body
             let mut request_init = RequestInit::new();
             request_init.with_method(Method::Post);
@@ -119,7 +115,6 @@ async fn cron(event: ScheduledEvent, env: Env, ctx: ScheduleContext) {
                     return;
                 }
             };
-        
 
             // Fetch user data with error handling
             let mut user_res = match user_data_stub.fetch_with_request(request).await {
@@ -137,17 +132,14 @@ async fn cron(event: ScheduledEvent, env: Env, ctx: ScheduleContext) {
             let data: UserData = match user_res.json().await {
                 Ok(json) => json,
                 Err(e) => {
-                    console_log!(
-                        "Failed to parse JSON for cans_id {}: {}",
-                        cans_id_clone,
-                        e
-                    );
+                    console_log!("Failed to parse JSON for cans_id {}: {}", cans_id_clone, e);
                     return;
                 }
             };
 
             // Prepare the arguments for the update call with error handling
-            let update_args = match Encode!(&cans_id_clone, &serde_json::to_string(&data).unwrap()) {
+            let update_args = match Encode!(&cans_id_clone, &serde_json::to_string(&data).unwrap())
+            {
                 Ok(args) => args,
                 Err(e) => {
                     console_log!(
@@ -170,11 +162,7 @@ async fn cron(event: ScheduledEvent, env: Env, ctx: ScheduleContext) {
                     console_log!("Successfully updated agent for cans_id {}", cans_id_clone);
                 }
                 Err(e) => {
-                    console_log!(
-                        "Agent update failed for cans_id {}: {}",
-                        cans_id_clone,
-                        e
-                    );
+                    console_log!("Agent update failed for cans_id {}: {}", cans_id_clone, e);
                 }
             }
         });

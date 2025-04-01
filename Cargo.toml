@@ -24,3 +24,4 @@ serde = { version = "1.0.216", features = ["derive"] }
 ic-agent = { version = "0.39.1", features = ["wasm-bindgen"] }
 serde_json = "1.0.133"
 candid = "0.10.11"
+rand = "0.8.5"
