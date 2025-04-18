@@ -1,31 +1,15 @@
-use std::{
-    time::{SystemTime, UNIX_EPOCH},
-    usize,
-};
-
-use candid::{CandidType, Encode};
 use futures::TryStreamExt;
-use ic_agent::{export::Principal, Agent};
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
+use rand::{
+    distributions::{Alphanumeric, DistString},
+    thread_rng, Rng,
+};
+use registry::insert_new_user;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use wasm_bindgen::JsValue;
 use worker::*;
 
 mod registry;
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Copy, CandidType)]
-enum PowerUpKind {
-    RowPowerUp,
-    ColumnPowerUp,
-    NearestSquarePowerUp,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, CandidType)]
-enum BadgesKind {
-    TenTaskBadge,
-    TwentyTaskBadge,
-    ThirtyTaskBadge,
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 enum Op {
@@ -57,7 +41,21 @@ struct WsMsg {
     op: Op,
 }
 
-#[derive(Deserialize, Clone, Debug, Serialize, PartialEq, CandidType)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Copy)]
+enum PowerUpKind {
+    RowPowerUp,
+    ColumnPowerUp,
+    NearestSquarePowerUp,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+enum BadgesKind {
+    TenTaskBadge,
+    TwentyTaskBadge,
+    ThirtyTaskBadge,
+}
+
+#[derive(Deserialize, Clone, Debug, Serialize, PartialEq)]
 enum LeagueType {
     Bronze,
     Silver,
@@ -69,21 +67,21 @@ enum LeagueType {
     Challenger,
 }
 
-#[derive(Deserialize, Clone, Debug, Serialize, CandidType)]
+#[derive(Deserialize, Clone, Debug, Serialize)]
 struct LeaderboardData {
     league: usize,
     global: usize,
 }
 
-#[derive(Deserialize, Clone, Debug, Serialize, CandidType)]
+#[derive(Deserialize, Clone, Debug, Serialize)]
 struct UserProfile {
-    user_id: Principal,
+    user_id: String,
     email: Option<String>,
     pfp: Option<String>,
     last_login: u64,
 }
 
-#[derive(Deserialize, Clone, Debug, Serialize, CandidType)]
+#[derive(Deserialize, Clone, Debug, Serialize)]
 struct GameState {
     active_aliens: [usize; 16],
     inventory_aliens: Vec<usize>,
@@ -92,7 +90,7 @@ struct GameState {
     total_merged_aliens: usize,
 }
 
-#[derive(Deserialize, Clone, Debug, Serialize, CandidType)]
+#[derive(Deserialize, Clone, Debug, Serialize)]
 struct Progress {
     iq: usize,
     social_score: usize,
@@ -104,13 +102,13 @@ struct Progress {
     badges: Vec<BadgesKind>,
 }
 
-#[derive(Deserialize, Clone, Debug, Serialize, CandidType)]
+#[derive(Deserialize, Clone, Debug, Serialize)]
 struct SocialData {
     players_referred: usize,
     referal_code: String,
 }
 
-#[derive(Deserialize, Clone, Debug, Serialize, CandidType)]
+#[derive(Deserialize, Clone, Debug, Serialize)]
 struct UserData {
     profile: UserProfile,
     game_state: GameState,
@@ -125,7 +123,7 @@ impl Default for UserData {
         console_log!("defaulting user data");
         Self {
             profile: UserProfile {
-                user_id: Principal::anonymous(),
+                user_id: Alphanumeric.sample_string(&mut thread_rng(), 32),
                 email: None,
                 pfp: None,
                 last_login: Date::now().as_millis() / 1000,
@@ -332,9 +330,16 @@ impl DurableObject for UserDataWrapper {
                 )
             }
             Op::GetData => Response::from_json(&user_data),
-            Op::Register => register_wallet_address(&user_data.profile.user_id.to_text())
-                .await
-                .inspect_err(|e| console_log!("Registration failed :{:?}", e)),
+            Op::Register => {
+                create_table_if_not_exists(&self.env.d1("D1_DATABASE")?).await?;
+                match insert_new_user(&user_data, &self.env.d1("D1_DATABASE")?).await {
+                    Ok(_) => Response::ok("User registered successfully!"),
+                    Err(e) => {
+                        console_error!("Registration failed: {:?}", e);
+                        Response::error("Registration failed", 500)
+                    }
+                }
+            }
 
             // Profile operations
             Op::UpdateEmail(email) => {
@@ -492,7 +497,12 @@ pub async fn fetch(req: Request, env: Env, ctx: Context) -> Result<Response> {
             return Response::error("Unauthorized", 401);
         };
 
-        if auth_header != env.var("AUTH_TOKEN").map(|v| v.to_string()).unwrap_or("joel".to_string()) {
+        if auth_header
+            != env
+                .var("AUTH_TOKEN")
+                .map(|v| v.to_string())
+                .unwrap_or("joel".to_string())
+        {
             return Response::error("Unauthorized", 401);
         }
         if upgrade_header.to_lowercase() == "websocket" {
@@ -536,30 +546,48 @@ pub async fn fetch(req: Request, env: Env, ctx: Context) -> Result<Response> {
                                 data.user_id
                             );
 
-                            // Forward the operation to the Durable Object
-                            if let Err(e) = forward_op_to_do(&env_clone, &data).await {
-                                console_log!("Failed to forward operation: {:?}", e);
-                                // Optionally, send an error message back to the client
-                                let _ = server.send_with_str(&format!("Error: {}", e));
-                            }
-
+                            // This call handles the operation and potential errors
                             match forward_op_to_do(&env_clone, &data).await {
                                 Ok(mut res) => {
-                                    if data.op == Op::GetData {
-                                        let response_body: UserData = res.json().await.unwrap();
-
-                                        let _ = server.send_with_str(
-                                            &json!(
-                                                {"refreshed_data": response_body}
-                                            )
-                                            .to_string(),
-                                        );
+                                    // Always try to read the response body and send it back
+                                    match res.text().await {
+                                        Ok(response_text) => {
+                                            console_log!(
+                                                "Sending DO response back to client: {}",
+                                                response_text
+                                            );
+                                            // Send the raw JSON string received from the DO
+                                            if let Err(e) = server.send_with_str(&response_text) {
+                                                console_error!(
+                                                    "Error sending WebSocket message: {}",
+                                                    e
+                                                );
+                                            }
+                                        }
+                                        Err(e) => {
+                                            // Error reading response body from DO
+                                            let error_msg =
+                                                format!("Error reading DO response body: {}", e);
+                                            console_error!("{}", error_msg);
+                                            if let Err(e) = server.send_with_str(&error_msg) {
+                                                console_error!(
+                                                    "Error sending WebSocket error message: {}",
+                                                    e
+                                                );
+                                            }
+                                        }
                                     }
                                 }
                                 Err(e) => {
                                     console_log!("Failed to forward operation: {:?}", e);
                                     // Optionally, send an error message back to the client
-                                    let _ = server.send_with_str(&format!("Error: {}", e));
+                                    let error_msg = format!("Error processing operation: {}", e);
+                                    if let Err(e_send) = server.send_with_str(&error_msg) {
+                                        console_error!(
+                                            "Error sending WebSocket error message: {}",
+                                            e_send
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -583,61 +611,90 @@ pub async fn fetch(req: Request, env: Env, ctx: Context) -> Result<Response> {
     Response::ok("This endpoint upgrades to WebSockets.")
 }
 
-async fn register_wallet_address(wallet_address: &str) -> Result<Response> {
-    console_log!("Starting wallet registration for address: {}", wallet_address);
-    
-    // Step 1: Build the Agent
-    let agent = Agent::builder()
-        .with_url("http://127.0.0.1:4943")
-        .build()
-        .map_err(|e| {
-            console_log!("Failed to build agent: {:?}", e);
-            e.to_string()
-        })?;
+async fn create_table_if_not_exists(d1: &D1Database) -> Result<Response> {
+    // SQLite doesn't support ENUM types or array types, so we need to modify our approach
+    let stmt = d1.prepare(
+        r#"
+    -- Create UserProfile table
+    CREATE TABLE IF NOT EXISTS user_profile (
+        user_id TEXT PRIMARY KEY,
+        email TEXT,
+        pfp TEXT,
+        last_login INTEGER NOT NULL
+    );
 
-    console_log!("Agent built successfully");
-    
-    agent.fetch_root_key().await.unwrap();
-    console_log!("Root key fetched");
-    
-    let principal = Principal::from_text("bkyz2-fmaaa-aaaaa-qaaaq-cai").map_err(|e| {
-        console_log!("Invalid Principal format: {:?}", e);
-        e.to_string()
-    })?;
-    console_log!("Principal parsed successfully");
+    -- Create GameState table
+    CREATE TABLE IF NOT EXISTS game_state (
+        game_state_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        active_aliens TEXT NOT NULL, -- JSON string representing array
+        inventory_aliens TEXT NOT NULL, -- JSON string representing array
+        power_ups TEXT NOT NULL, -- JSON string representing array of enums
+        king_lvl INTEGER NOT NULL,
+        total_merged_aliens INTEGER NOT NULL,
+        user_id TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES user_profile(user_id)
+    );
 
-    // Step 3: Encode the Argument
-    let mut data = UserData::default();
-    data.profile.user_id = Principal::from_text(wallet_address).map_err(|e| e.to_string())?;
-    console_log!("User data initialized with wallet address");
-    
-    let encoded_arg = Encode!(&data).map_err(|e| {
-        console_log!("Failed to encode wallet address: {:?}", e);
-        e.to_string()
-    })?;
-    console_log!("Arguments encoded successfully");
+    -- Create Progress table
+    CREATE TABLE IF NOT EXISTS progress (
+        progress_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        iq INTEGER NOT NULL,
+        social_score INTEGER NOT NULL,
+        product INTEGER NOT NULL,
+        all_task_done INTEGER NOT NULL, -- SQLite boolean (0 or 1)
+        akai_balance INTEGER NOT NULL,
+        total_task_completed INTEGER NOT NULL,
+        streak INTEGER NOT NULL,
+        badges TEXT NOT NULL, -- JSON string representing array of enum values
+        user_id TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES user_profile(user_id)
+    );
 
-    // Step 4: Make the Update Call
-    console_log!("Making update call to register principal");
-    let res = agent
-        .update(&principal, "register_principal")
-        .with_arg(encoded_arg)
-        .call_and_wait()
-        .await
-        .map_err(|e| {
-            console_log!("Agent update call failed: {:?}", e);
-            e.to_string()
-        })?;
+    -- Create SocialData table
+    CREATE TABLE IF NOT EXISTS social_data (
+        social_data_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        players_referred INTEGER NOT NULL,
+        referal_code TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES user_profile(user_id)
+    );
 
-    console_log!("Agent update call succeeded: {:?}", res);
-    console_log!("Wallet registration completed successfully");
+    -- Create LeaderboardData table
+    CREATE TABLE IF NOT EXISTS leaderboard_data (
+        leaderboard_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        league INTEGER NOT NULL,
+        global INTEGER NOT NULL,
+        user_id TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES user_profile(user_id)
+    );
 
-    Response::ok("Done!")
+    -- Create UserData table to link everything together
+    CREATE TABLE IF NOT EXISTS user_data (
+        user_id TEXT PRIMARY KEY,
+        league TEXT NOT NULL, -- String representation of the enum
+        FOREIGN KEY (user_id) REFERENCES user_profile(user_id)
+    );
+    "#,
+    );
+
+    stmt.run().await?;
+    Response::ok("Tables created successfully!")
 }
+
+// async fn register_wallet_address(wallet_address: &str, d1: D1Database) -> Result<Response> {
+//     create_table_if_not_exists(&d1).await?;
+//     console_log!("Tables created successfully!");
+//     let mut default = UserData::default();
+//     default.profile.user_id = wallet_address.to_string();
+//     console_log!("Default user data created successfully!");
+//     insert_new_user(&default, &d1).await?;
+//     console_log!("User data inserted successfully!");
+//     Response::ok("User registered successfully!")
+// }
 
 async fn forward_op_to_do(env: &Env, data: &WsMsg) -> Result<Response> {
     console_log!("Starting forward_op_to_do for user: {}", data.user_id);
-    
+
     let do_namespace = env.durable_object("USER_DATA_WRAPPER")?;
     console_log!("Got durable object namespace");
 

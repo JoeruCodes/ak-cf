@@ -19,3 +19,8 @@ new_classes = [ "UserDataWrapper" ]
 
 [observability.logs]
 enabled = true
+
+[[d1_databases]]
+binding = "D1_DATABASE"
+database_name = "d1_database"
+database_id = "d1_database"
