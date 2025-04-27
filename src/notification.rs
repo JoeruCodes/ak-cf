@@ -1,9 +1,11 @@
 use uuid::Uuid;
 use worker::{D1Database, Result};
 use chrono::Utc;
+use serde::{Deserialize, Serialize};
 
 
-#[derive(Debug, Clone)]
+
+#[derive(Deserialize, Clone, Debug, Serialize)]
 pub struct Notification {
     pub notification_id: String,
     pub user_id: String,
@@ -13,7 +15,7 @@ pub struct Notification {
     pub read: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Deserialize, Clone, Debug, Serialize, PartialEq)]
 pub enum NotificationType {
     Referral,
     Reward,
