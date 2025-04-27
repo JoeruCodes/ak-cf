@@ -9,6 +9,7 @@ mod registry;
 mod sql;
 mod types;
 mod utils;
+mod notification;
 
 #[durable_object]
 struct UserDataWrapper {
@@ -71,7 +72,7 @@ impl DurableObject for UserDataWrapper {
 }
 
 #[event(fetch)]
-pub async fn fetch(req: Request, env: Env, ctx: Context) -> Result<Response> {
+pub async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     if let Some(upgrade_header) = req.headers().get("Upgrade")? {
         let Some(auth_header) = req.headers().get("Authorization")? else {
             return Response::error("Unauthorized", 401);

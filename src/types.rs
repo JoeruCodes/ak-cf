@@ -5,6 +5,23 @@ use rand::{
 use serde::{Deserialize, Serialize};
 use worker::{console_log, Date};
 
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Notification {
+    pub id: String,          // unique id for each notification
+    pub kind: NotificationType, // type of notification
+    pub message: String,     // text message
+    pub timestamp: u64,      // unix time (in seconds)
+    pub read: bool,          // whether the notification was read
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum NotificationType {
+    Referral,
+    ConsensusResult,
+    GameUpdate,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Op {
     CombineAlien(usize, usize),
@@ -109,6 +126,7 @@ pub struct UserData {
     pub progress: Progress,
     pub social: SocialData,
     pub league: LeagueType,
+    pub notifications: Vec<Notification>, // <-- added this
 }
 
 impl Default for UserData {
@@ -147,6 +165,7 @@ impl Default for UserData {
                     .collect(),
             },
             league: LeagueType::Bronze,
+            notifications: Vec::new(), // <-- added this
         }
     }
 }
@@ -166,6 +185,22 @@ impl UserData {
         } else if time_since_last_login >= two_days {
             self.progress.streak = 0;
             self.profile.last_login = current_time;
+        }
+    }
+    pub fn add_notification(&mut self, kind: NotificationType, message: String) {
+        let notification = Notification {
+            id: Alphanumeric.sample_string(&mut thread_rng(), 16), // 16-char id
+            kind,
+            message,
+            timestamp: Date::now().as_millis() / 1000,
+            read: false,
+        };
+        self.notifications.push(notification);
+    }
+
+    pub fn mark_notification_read(&mut self, notification_id: &str) {
+        if let Some(notification) = self.notifications.iter_mut().find(|n| n.id == notification_id) {
+            notification.read = true;
         }
     }
 }
