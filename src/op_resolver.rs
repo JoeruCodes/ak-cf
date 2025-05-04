@@ -67,50 +67,35 @@ impl UserData {
                 )
             }
             Op::SpawnPowerup(powerup) => {
-                if self
-                    .game_state
-                    .power_ups
-                    .iter_mut()
-                    .find(|p| p.is_none())
-                    .map(|p| *p = Some(*powerup))
-                    .is_none()
-                {
-                    Response::error("No empty slot for powerup", 400)
-                } else {
-                    Response::ok(
-                        json!({
-                            "power_ups": self.game_state.power_ups
-                        })
-                        .to_string(),
-                    )
-                }
+               self.game_state.power_ups.push(*powerup);
+               Response::ok(
+                    json!({
+                        "power_ups": self.game_state.power_ups
+                    })
+                    .to_string(),
+                )
             }
             Op::UsePowerup(idx) => {
-                let power_up = self.game_state.power_ups[*idx];
-                if power_up.is_none() {
-                    return Response::error("No powerup in slot", 400);
-                }
-                power_up.map(|p| match p {
+                let power_up = self.game_state.power_ups.swap_remove(*idx);
+
+                 match power_up {
                     PowerUpKind::ColumnPowerUp => {
                         for i in 0..4 {
                             self.game_state.active_aliens[i] += 1;
                         }
-                        self.game_state.power_ups[*idx] = None;
                     }
                     PowerUpKind::RowPowerUp => {
                         for i in 0..4 {
                             self.game_state.active_aliens[i * 4] += 1;
                         }
-                        self.game_state.power_ups[*idx] = None;
                     }
                     PowerUpKind::NearestSquarePowerUp => {
                         for i in 0..4 {
                             self.game_state.active_aliens[i * 4] += 1;
                             self.game_state.active_aliens[i * 4 + 1] += 1;
                         }
-                        self.game_state.power_ups[*idx] = None;
                     }
-                });
+                }
                 Response::ok(
                     json!({
                         "power_ups": self.game_state.power_ups
@@ -188,6 +173,26 @@ impl UserData {
                     })
                     .to_string(),
                 )
+            }
+            Op::MoveAlienFromInventoryToActive => {
+                match self.game_state.active_aliens.iter().position(|a| *a == 0){
+                    Some(alien) => {
+                        let inven = self.game_state.inventory_aliens.pop();
+                        
+                        match inven{
+                            Some(inven) =>  {
+                                self.game_state.active_aliens[alien] = inven;
+
+                                Response::ok(json!({
+                                    "active_aliens": self.game_state.active_aliens,
+                                    "inventory_aliens": self.game_state.inventory_aliens
+                                }).to_string())
+                            }
+                            None => Response::error("No aliens in inventory", 404)
+                        }
+                    },
+                    None => Response::error("Active aliens full!", 404)
+                }
             }
             Op::UpdateAllTaskDone(done) => {
                 self.progress.all_task_done = *done;

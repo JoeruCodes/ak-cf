@@ -7,14 +7,13 @@ use crate::{
 };
 
 // Helper function to convert power_ups to JSON for SQLite
-pub fn convert_power_ups_to_json(power_ups: &[Option<PowerUpKind>; 3]) -> String {
+pub fn convert_power_ups_to_json(power_ups: &Vec<PowerUpKind> ) -> String {
     let power_up_strings: Vec<Option<String>> = power_ups
         .iter()
         .map(|opt_pu| match opt_pu {
-            Some(PowerUpKind::RowPowerUp) => Some("RowPowerUp".to_string()),
-            Some(PowerUpKind::ColumnPowerUp) => Some("ColumnPowerUp".to_string()),
-            Some(PowerUpKind::NearestSquarePowerUp) => Some("NearestSquarePowerUp".to_string()),
-            None => None,
+            PowerUpKind::RowPowerUp => Some("RowPowerUp".to_string()),
+            PowerUpKind::ColumnPowerUp => Some("ColumnPowerUp".to_string()),
+            PowerUpKind::NearestSquarePowerUp => Some("NearestSquarePowerUp".to_string()),
         })
         .collect();
 

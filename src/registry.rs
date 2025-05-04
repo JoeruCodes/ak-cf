@@ -1,5 +1,4 @@
 use futures::{stream::FuturesUnordered, StreamExt};
-use serde_json;
 use wasm_bindgen::JsValue;
 use worker::*;
 

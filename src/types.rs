@@ -46,6 +46,7 @@ pub enum Op {
     IncrementPlayersReferred,
     UpdateLeague(LeagueType),
     UpdateAllTaskDone(bool),
+    MoveAlienFromInventoryToActive,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -98,7 +99,7 @@ pub struct UserProfile {
 pub struct GameState {
     pub active_aliens: [usize; 16],
     pub inventory_aliens: Vec<usize>,
-    pub power_ups: [Option<PowerUpKind>; 3],
+    pub power_ups: Vec<PowerUpKind>,
     pub king_lvl: usize,
     pub total_merged_aliens: usize,
 }
@@ -134,7 +135,7 @@ pub struct UserData {
 impl Default for UserData {
     fn default() -> Self {
         console_log!("defaulting user data");
-        Self {
+        let mut res = Self {
             profile: UserProfile {
                 user_id: Alphanumeric.sample_string(&mut thread_rng(), 32),
                 email: None,
@@ -144,7 +145,7 @@ impl Default for UserData {
             game_state: GameState {
                 active_aliens: [0; 16],
                 inventory_aliens: Vec::new(),
-                power_ups: [None; 3],
+                power_ups: Vec::new(),
                 king_lvl: 0,
                 total_merged_aliens: 0,
             },
@@ -168,7 +169,13 @@ impl Default for UserData {
             },
             league: LeagueType::Bronze,
             notifications: Vec::new(), // <-- added this
+        };
+
+        for i in 0..5{
+            res.game_state.active_aliens[i] = 1;
         }
+
+        res
     }
 }
 
