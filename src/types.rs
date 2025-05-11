@@ -137,7 +137,8 @@ impl Default for UserData {
         console_log!("defaulting user data");
         let mut res = Self {
             profile: UserProfile {
-                user_id: Alphanumeric.sample_string(&mut thread_rng(), 32),
+                user_id:
+                 Alphanumeric.sample_string(&mut thread_rng(), 32),
                 email: None,
                 pfp: None,
                 last_login: Date::now().as_millis() / 1000,
@@ -161,7 +162,8 @@ impl Default for UserData {
             },
             social: SocialData {
                 players_referred: 0,
-                referal_code: thread_rng()
+                referal_code: 
+                thread_rng()
                     .sample_iter(Alphanumeric)
                     .take(8)
                     .map(|b| b as char)
