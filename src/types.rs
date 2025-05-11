@@ -47,6 +47,7 @@ pub enum Op {
     UpdateLeague(LeagueType),
     UpdateAllTaskDone(bool),
     MoveAlienFromInventoryToActive,
+    UpdateUserName(Option<String>)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -92,6 +93,7 @@ pub struct UserProfile {
     pub user_id: String,
     pub email: Option<String>,
     pub pfp: Option<String>,
+    pub user_name: Option<String>,
     pub last_login: u64,
 }
 
@@ -141,6 +143,7 @@ impl Default for UserData {
                  Alphanumeric.sample_string(&mut thread_rng(), 32),
                 email: None,
                 pfp: None,
+                user_name: None,
                 last_login: Date::now().as_millis() / 1000,
             },
             game_state: GameState {

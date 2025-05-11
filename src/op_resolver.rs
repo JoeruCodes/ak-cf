@@ -272,6 +272,13 @@ impl UserData {
                     .to_string(),
                 )
             }
+            Op::UpdateUserName(user_name) => {
+                self.profile.user_name = user_name.clone();
+
+                Response::ok(json!({
+                    "user_name": self.profile.user_name
+                }).to_string())
+            }
         }
     }
 }

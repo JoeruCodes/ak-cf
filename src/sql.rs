@@ -14,6 +14,7 @@ pub async fn create_table_if_not_exists(d1: &D1Database) -> Result<Response> {
         user_id TEXT PRIMARY KEY,
         email TEXT,
         pfp TEXT,
+        user_name TEXT,
         last_login INTEGER NOT NULL
     );
 
@@ -80,9 +81,10 @@ pub async fn insert_new_user(data: &UserData, d1: &D1Database) -> Result<()> {
 
     // Insert into user_profile
     let stmt_profile = d1
-        .prepare("INSERT INTO user_profile (user_id, email, pfp, last_login) VALUES (?, ?, ?, ?)");
+        .prepare("INSERT INTO user_profile (user_name, user_id, email, pfp, last_login) VALUES (?, ?, ?, ?, ?)");
     stmt_profile
         .bind(&[
+            data.profile.user_name.clone().into(),
             user_id.into(),
             data.profile
                 .email
@@ -171,9 +173,10 @@ pub async fn update_user_data(data: &UserData, d1: &D1Database) -> Result<()> {
 
     // Update user_profile
     let stmt_profile =
-        d1.prepare("UPDATE user_profile SET email = ?, pfp = ?, last_login = ? WHERE user_id = ?");
+        d1.prepare("UPDATE user_profile SET user_name = ?, email = ?, pfp = ?, last_login = ? WHERE user_id = ?");
     stmt_profile
         .bind(&[
+            data.profile.user_name.clone().map(JsValue::from).unwrap_or_else(JsValue::null),
             data.profile
                 .email
                 .clone()
