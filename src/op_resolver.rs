@@ -279,6 +279,13 @@ impl UserData {
                     "user_name": self.profile.user_name
                 }).to_string())
             }
+            Op::UpdatePassword(password) => {
+                self.profile.password = password.clone();
+
+                Response::ok(json!({
+                    "user_name": self.profile.password
+                }).to_string())
+            }
         }
     }
 }

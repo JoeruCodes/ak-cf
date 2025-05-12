@@ -15,6 +15,7 @@ pub async fn create_table_if_not_exists(d1: &D1Database) -> Result<Response> {
         email TEXT,
         pfp TEXT,
         user_name TEXT,
+        password TEXT,
         last_login INTEGER NOT NULL
     );
 
