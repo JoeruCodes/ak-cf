@@ -67,8 +67,8 @@ impl UserData {
                 )
             }
             Op::SpawnPowerup(powerup) => {
-               self.game_state.power_ups.push(*powerup);
-               Response::ok(
+                self.game_state.power_ups.push(*powerup);
+                Response::ok(
                     json!({
                         "power_ups": self.game_state.power_ups
                     })
@@ -78,7 +78,7 @@ impl UserData {
             Op::UsePowerup(idx) => {
                 let power_up = self.game_state.power_ups.swap_remove(*idx);
 
-                 match power_up {
+                match power_up {
                     PowerUpKind::ColumnPowerUp => {
                         for i in 0..4 {
                             self.game_state.active_aliens[i] += 1;
@@ -175,23 +175,26 @@ impl UserData {
                 )
             }
             Op::MoveAlienFromInventoryToActive => {
-                match self.game_state.active_aliens.iter().position(|a| *a == 0){
+                match self.game_state.active_aliens.iter().position(|a| *a == 0) {
                     Some(alien) => {
                         let inven = self.game_state.inventory_aliens.pop();
-                        
-                        match inven{
-                            Some(inven) =>  {
+
+                        match inven {
+                            Some(inven) => {
                                 self.game_state.active_aliens[alien] = inven;
 
-                                Response::ok(json!({
-                                    "active_aliens": self.game_state.active_aliens,
-                                    "inventory_aliens": self.game_state.inventory_aliens
-                                }).to_string())
+                                Response::ok(
+                                    json!({
+                                        "active_aliens": self.game_state.active_aliens,
+                                        "inventory_aliens": self.game_state.inventory_aliens
+                                    })
+                                    .to_string(),
+                                )
                             }
-                            None => Response::error("No aliens in inventory", 404)
+                            None => Response::error("No aliens in inventory", 404),
                         }
-                    },
-                    None => Response::error("Active aliens full!", 404)
+                    }
+                    None => Response::error("Active aliens full!", 404),
                 }
             }
             Op::UpdateAllTaskDone(done) => {
@@ -275,16 +278,36 @@ impl UserData {
             Op::UpdateUserName(user_name) => {
                 self.profile.user_name = user_name.clone();
 
-                Response::ok(json!({
-                    "user_name": self.profile.user_name
-                }).to_string())
+                Response::ok(
+                    json!({
+                        "user_name": self.profile.user_name
+                    })
+                    .to_string(),
+                )
             }
             Op::UpdatePassword(password) => {
                 self.profile.password = password.clone();
 
-                Response::ok(json!({
-                    "user_name": self.profile.password
-                }).to_string())
+                Response::ok(
+                    json!({
+                        "user_name": self.profile.password
+                    })
+                    .to_string(),
+                )
+            }
+            Op::MoveAlienInGrid (from, to ) => {
+                if *from >= 16 || *to >= 16 {
+                    return Response::error("Invalid grid position", 400);
+                }
+
+                self.game_state.active_aliens.swap(*from, *to);
+
+                Response::ok(
+                    json!({
+                        "active_aliens": self.game_state.active_aliens
+                    })
+                    .to_string(),
+                )
             }
         }
     }

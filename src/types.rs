@@ -48,8 +48,8 @@ pub enum Op {
     UpdateAllTaskDone(bool),
     MoveAlienFromInventoryToActive,
     UpdateUserName(Option<String>),
-    UpdatePassword(Option<String>)
-
+    UpdatePassword(Option<String>),
+    MoveAlienInGrid ( usize,  usize ),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
