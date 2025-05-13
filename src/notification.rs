@@ -19,7 +19,7 @@ pub struct Notification {
 pub enum NotificationType {
     Referral,
     Reward,
-    System,
+    System
 }
 
 impl NotificationType {

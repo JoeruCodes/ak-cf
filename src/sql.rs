@@ -70,6 +70,17 @@ pub async fn create_table_if_not_exists(d1: &D1Database) -> Result<Response> {
         league TEXT NOT NULL, -- String representation of the enum
         FOREIGN KEY (user_id) REFERENCES user_profile(user_id)
     );
+
+    -- Create Notifications table
+CREATE TABLE IF NOT EXISTS notifications (
+    notification_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    notification_type TEXT NOT NULL,
+    message TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    read INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES user_profile(user_id)
+);
     "#,
     );
 
@@ -82,11 +93,11 @@ pub async fn insert_new_user(data: &UserData, d1: &D1Database) -> Result<()> {
 
     // Insert into user_profile
     let stmt_profile = d1
-        .prepare("INSERT INTO user_profile (user_name,password, user_id, email, pfp, last_login) VALUES (?, ?, ?, ?, ?)");
+        .prepare("INSERT INTO user_profile (user_name,password, user_id, email, pfp, last_login) VALUES (?, ?, ?, ?, ?,?)");
     stmt_profile
         .bind(&[
-            data.profile.user_name.clone().into(),
-            data.profile.password.clone().into(),
+            data.profile.user_name.clone().map(JsValue::from).unwrap_or(JsValue::null()),
+            data.profile.password.clone().map(JsValue::from).unwrap_or(JsValue::null()),
             user_id.into(),
             data.profile
                 .email
@@ -178,8 +189,16 @@ pub async fn update_user_data(data: &UserData, d1: &D1Database) -> Result<()> {
         d1.prepare("UPDATE user_profile SET user_name = ?,password = ?, email = ?, pfp = ?, last_login = ? WHERE user_id = ?");
     stmt_profile
         .bind(&[
-            data.profile.user_name.clone().map(JsValue::from).unwrap_or_else(JsValue::null),
-            data.profile.password.clone().map(JsValue::from).unwrap_or_else(JsValue::null),
+            data.profile
+                .user_name
+                .clone()
+                .map(JsValue::from)
+                .unwrap_or_else(JsValue::null),
+            data.profile
+                .password
+                .clone()
+                .map(JsValue::from)
+                .unwrap_or_else(JsValue::null),
             data.profile
                 .email
                 .clone()

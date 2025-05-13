@@ -146,8 +146,8 @@ impl Default for UserData {
                  Alphanumeric.sample_string(&mut thread_rng(), 32),
                 email: None,
                 pfp: None,
-                user_name: None,
-                password:None,
+                user_name: Some("guest".to_string()),
+                password: Some("123456".to_string()),
                 last_login: Date::now().as_millis() / 1000,
             },
             game_state: GameState {
