@@ -30,7 +30,7 @@ pub enum Op {
     SpawnAlien,
     DeleteAlienFromInventory(usize),
     DeleteAlienFromActive(usize),
-    UsePowerup(usize),
+    UsePowerup ( usize, usize ), //changed
     SpawnPowerup(PowerUpKind),
     GetData,
     Register,

@@ -75,34 +75,54 @@ impl UserData {
                     .to_string(),
                 )
             }
-            Op::UsePowerup(idx) => {
+            Op::UsePowerup ( idx, target_pos ) => {
+                if *idx >= self.game_state.power_ups.len() || *target_pos >= 16 {
+                    return Response::error("Invalid powerup index or target position", 400);
+                }
+
                 let power_up = self.game_state.power_ups.swap_remove(*idx);
 
                 match power_up {
                     PowerUpKind::ColumnPowerUp => {
-                        for i in 0..4 {
-                            self.game_state.active_aliens[i] += 1;
+                        let col = *target_pos % 4;
+                        for row in 0..4 {
+                            self.game_state.active_aliens[row * 4 + col] += 1;
                         }
                     }
                     PowerUpKind::RowPowerUp => {
-                        for i in 0..4 {
-                            self.game_state.active_aliens[i * 4] += 1;
+                        let row = *target_pos / 4;
+                        for col in 0..4 {
+                            self.game_state.active_aliens[row * 4 + col] += 1;
                         }
                     }
                     PowerUpKind::NearestSquarePowerUp => {
-                        for i in 0..4 {
-                            self.game_state.active_aliens[i * 4] += 1;
-                            self.game_state.active_aliens[i * 4 + 1] += 1;
+                        let x = *target_pos % 4;
+                        let y = *target_pos / 4;
+
+                        // Nearest 2x2 square from (x, y)
+                        let candidates = [(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)];
+
+                        for (nx, ny) in candidates {
+                            if nx < 4 && ny < 4 {
+                                let index = ny * 4 + nx;
+                                self.game_state.active_aliens[index] += 1;
+                            }
                         }
                     }
                 }
+
+                calculate_king_alien_lvl(self);
+
                 Response::ok(
                     json!({
-                        "power_ups": self.game_state.power_ups
+                        "active_aliens": self.game_state.active_aliens,
+                        "power_ups": self.game_state.power_ups,
+                        "king_lvl": self.game_state.king_lvl
                     })
                     .to_string(),
                 )
             }
+
             Op::AwardBadge(badge) => {
                 self.progress.badges.push(badge.clone());
                 Response::ok(
@@ -295,7 +315,7 @@ impl UserData {
                     .to_string(),
                 )
             }
-            Op::MoveAlienInGrid (from, to ) => {
+            Op::MoveAlienInGrid(from, to) => {
                 if *from >= 16 || *to >= 16 {
                     return Response::error("Invalid grid position", 400);
                 }
