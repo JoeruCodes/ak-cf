@@ -82,10 +82,11 @@ pub async fn insert_new_user(data: &UserData, d1: &D1Database) -> Result<()> {
 
     // Insert into user_profile
     let stmt_profile = d1
-        .prepare("INSERT INTO user_profile (user_name, user_id, email, pfp, last_login) VALUES (?, ?, ?, ?, ?)");
+        .prepare("INSERT INTO user_profile (user_name,password, user_id, email, pfp, last_login) VALUES (?, ?, ?, ?, ?)");
     stmt_profile
         .bind(&[
             data.profile.user_name.clone().into(),
+            data.profile.password.clone().into(),
             user_id.into(),
             data.profile
                 .email
