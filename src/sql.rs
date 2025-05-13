@@ -175,10 +175,11 @@ pub async fn update_user_data(data: &UserData, d1: &D1Database) -> Result<()> {
 
     // Update user_profile
     let stmt_profile =
-        d1.prepare("UPDATE user_profile SET user_name = ?, email = ?, pfp = ?, last_login = ? WHERE user_id = ?");
+        d1.prepare("UPDATE user_profile SET user_name = ?,password = ?, email = ?, pfp = ?, last_login = ? WHERE user_id = ?");
     stmt_profile
         .bind(&[
             data.profile.user_name.clone().map(JsValue::from).unwrap_or_else(JsValue::null),
+            data.profile.password.clone().map(JsValue::from).unwrap_or_else(JsValue::null),
             data.profile
                 .email
                 .clone()
