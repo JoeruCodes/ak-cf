@@ -1,5 +1,7 @@
+use crate::notification::{push_notification_to_user_do, NotificationType};
+use crate::utils::find_user_id_by_referral_code;
 use serde_json::json;
-use worker::{console_error, console_log, D1Database, Response, Result};
+use worker::{console_error, console_log, D1Database, Env, Response, Result};
 
 use crate::{
     sql::insert_new_user,
@@ -8,14 +10,20 @@ use crate::{
     utils::calculate_product,
 };
 
+use crate::notification::Read;
+
 impl UserData {
-    pub async fn resolve_op(&mut self, op_request: &WsMsg, d1: &D1Database) -> Result<Response> {
+    pub async fn resolve_op(
+        &mut self,
+        op_request: &WsMsg,
+        d1: &D1Database,
+        env: &Env,
+    ) -> Result<Response> {
         match &op_request.op {
             Op::CombineAlien(idx_a, idx_b) => {
                 if idx_a == idx_b {
                     return Response::error("Combined Alien IDs cannot be the same", 400);
                 }
-
                 self.game_state.active_aliens[*idx_a] += 1;
                 self.game_state.active_aliens[*idx_b] =
                     if !self.game_state.inventory_aliens.is_empty() {
@@ -23,7 +31,6 @@ impl UserData {
                     } else {
                         0
                     };
-
                 self.game_state.total_merged_aliens += 1;
                 calculate_king_alien_lvl(self);
                 Response::ok(
@@ -75,7 +82,7 @@ impl UserData {
                     .to_string(),
                 )
             }
-            Op::UsePowerup ( idx, target_pos ) => {
+            Op::UsePowerup(idx, target_pos) => {
                 if *idx >= self.game_state.power_ups.len() || *target_pos >= 16 {
                     return Response::error("Invalid powerup index or target position", 400);
                 }
@@ -328,6 +335,79 @@ impl UserData {
                     })
                     .to_string(),
                 )
+            }
+            Op::AddNotificationInternal(notification) => {
+                if notification.notification_type == NotificationType::Referral {
+                    self.social.players_referred += 1;
+                }
+
+                self.notifications.push(notification.clone());
+
+                Response::ok(
+                    json!({
+                        "status": "Notification added to DO",
+                        "players_referred": self.social.players_referred
+                    })
+                    .to_string(),
+                )
+            }
+            Op::MarkNotificationRead(notification_id) => {
+                let mut found = false;
+
+                for notif in self.notifications.iter_mut() {
+                    if notif.notification_id == *notification_id {
+                        notif.read = Read::Yes;
+                        found = true;
+                        break;
+                    }
+                }
+
+                if found {
+                    Response::ok(
+                        json!({
+                            "status": "marked as read",
+                            "notification_id": notification_id,
+                            "notifications": self.notifications
+                        })
+                        .to_string(),
+                    )
+                } else {
+                    Response::error("Notification not found", 404)
+                }
+            }
+            Op::UseReferralCode(code) => {
+                // Fetch env separately in the DO and pass it into this method
+                let env = env.clone(); // Make sure you pass it into resolve_op beforehand
+
+                match find_user_id_by_referral_code(&d1, code).await {
+                    Ok(Some(referrer_user_id)) => {
+                        let message = "Your referral code was used!";
+                        if let Err(e) = push_notification_to_user_do(
+                            &env, // ✅ pass the env from the outside
+                            &referrer_user_id,
+                            NotificationType::Referral,
+                            message,
+                            None,
+                        )
+                        .await
+                        {
+                            console_error!("Failed to push referral notification: {:?}", e);
+                            return Response::error("Internal error", 500);
+                        }
+                        Response::ok(
+                            json!({
+                                "status": "Referral recorded",
+                                "referrer": referrer_user_id
+                            })
+                            .to_string(),
+                        )
+                    }
+                    Ok(None) => Response::error("Invalid referral code", 404),
+                    Err(e) => {
+                        console_error!("DB error during referral lookup: {:?}", e);
+                        Response::error("Database error", 500)
+                    }
+                }
             }
         }
     }

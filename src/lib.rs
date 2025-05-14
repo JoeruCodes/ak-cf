@@ -4,12 +4,12 @@ use utils::is_registered;
 use wasm_bindgen::JsValue;
 use worker::*;
 
+mod notification;
 mod op_resolver;
 mod registry;
 mod sql;
 mod types;
 mod utils;
-mod notification;
 
 #[durable_object]
 struct UserDataWrapper {
@@ -40,6 +40,12 @@ impl DurableObject for UserDataWrapper {
                 .unwrap_or_else(|_| {
                     let mut user = UserData::default();
                     user.profile.user_id = op_request.user_id.clone();
+
+                    // 🔁 Fix notification user_id
+                    for notif in &mut user.notifications {
+                        notif.user_id = op_request.user_id.clone();
+                    }
+
                     user
                 });
         console_log!("Host: {:?}", req.url());
@@ -57,7 +63,7 @@ impl DurableObject for UserDataWrapper {
         user_data.calculate_last_login();
 
         let response = user_data
-            .resolve_op(&op_request, &self.env.d1("D1_DATABASE").unwrap())
+            .resolve_op(&op_request, &self.env.d1("D1_DATABASE").unwrap(), &self.env)
             .await?;
 
         if !matches!(op_request.op, Op::GetData) {

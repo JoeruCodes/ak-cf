@@ -4,9 +4,11 @@ use rand::{
 };
 use serde::{Deserialize, Serialize};
 use worker::{console_log, Date};
+use uuid::Uuid;
+use chrono::Utc;
 
-use crate::notification::Notification;
-
+use crate::notification::{Notification, Read};
+use crate::notification::NotificationType;
 
 // #[derive(Serialize, Deserialize, Debug, Clone)]
 // pub struct Notification {
@@ -30,7 +32,7 @@ pub enum Op {
     SpawnAlien,
     DeleteAlienFromInventory(usize),
     DeleteAlienFromActive(usize),
-    UsePowerup ( usize, usize ), //changed
+    UsePowerup(usize, usize), //changed
     SpawnPowerup(PowerUpKind),
     GetData,
     Register,
@@ -49,7 +51,10 @@ pub enum Op {
     MoveAlienFromInventoryToActive,
     UpdateUserName(Option<String>),
     UpdatePassword(Option<String>),
-    MoveAlienInGrid ( usize,  usize ),
+    MoveAlienInGrid(usize, usize),
+    AddNotificationInternal(Notification),
+    MarkNotificationRead(String), // Takes notification_id as input
+    UseReferralCode(String)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -142,8 +147,7 @@ impl Default for UserData {
         console_log!("defaulting user data");
         let mut res = Self {
             profile: UserProfile {
-                user_id:
-                 Alphanumeric.sample_string(&mut thread_rng(), 32),
+                user_id: "kunal".to_string(),
                 email: None,
                 pfp: None,
                 user_name: Some("guest".to_string()),
@@ -169,8 +173,7 @@ impl Default for UserData {
             },
             social: SocialData {
                 players_referred: 0,
-                referal_code: 
-                thread_rng()
+                referal_code: thread_rng()
                     .sample_iter(Alphanumeric)
                     .take(8)
                     .map(|b| b as char)
@@ -180,9 +183,19 @@ impl Default for UserData {
             notifications: Vec::new(), // <-- added this
         };
 
-        for i in 0..5{
+        for i in 0..5 {
             res.game_state.active_aliens[i] = 1;
         }
+
+        res.notifications.push(Notification {
+            notification_id: Uuid::new_v4().to_string(),
+            user_id: res.profile.user_id.clone(),
+            notification_type: NotificationType::System,
+            message: "Welcome to the game!".to_string(),
+            timestamp: Utc::now().timestamp(),
+            read: Read::No,
+            metadata: None, // 👈 No metadata
+        });
 
         res
     }
@@ -206,9 +219,5 @@ impl UserData {
         }
     }
 
-    pub fn mark_notification_read(&mut self, notification_id: &str) {
-        if let Some(notification) = self.notifications.iter_mut().find(|n| n.notification_id == notification_id) {
-            notification.read = true;
-        }
-    }
+    
 }

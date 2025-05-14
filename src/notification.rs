@@ -1,25 +1,36 @@
 use uuid::Uuid;
-use worker::{D1Database, Result};
+use worker::*;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use crate::{Env,JsValue};
 
 
 
-#[derive(Deserialize, Clone, Debug, Serialize)]
+#[derive(Deserialize, Clone, Debug, Serialize,PartialEq)]
 pub struct Notification {
     pub notification_id: String,
     pub user_id: String,
     pub notification_type: NotificationType,
     pub message: String,
     pub timestamp: i64,
-    pub read: bool,
+    pub read: Read,
+
+    // ✅ New field for dynamic data
+    pub metadata: Option<HashMap<String, String>>
 }
 
 #[derive(Deserialize, Clone, Debug, Serialize, PartialEq)]
 pub enum NotificationType {
     Referral,
     Reward,
-    System
+    System,
+}
+
+#[derive(Deserialize, Clone, Debug, Serialize, PartialEq)]
+pub enum Read{
+    Yes,
+    No
 }
 
 impl NotificationType {
@@ -32,29 +43,52 @@ impl NotificationType {
     }
 }
 
-pub async fn add_notification(
-    d1: &D1Database,
+impl Read{
+    pub fn as_str(&self) -> &'static str{
+        match self{
+            Read::Yes => "Yes",
+            Read::No => "No",
+            }
+    }
+}
+
+pub async fn push_notification_to_user_do(
+    env: &Env,
     user_id: &str,
     notification_type: NotificationType,
     message: &str,
+    metadata: Option<HashMap<String, String>>,
 ) -> Result<()> {
-    let notification_id = Uuid::new_v4().to_string();
-    let timestamp = Utc::now().timestamp();
+    // 1. Get the DO namespace and stub
+    let namespace = env.durable_object("USER_DATA_WRAPPER")?;
+    let do_id = namespace.id_from_name(user_id)?;
+    let mut stub = do_id.get_stub()?;
 
-    let stmt = d1.prepare(
-        "INSERT INTO notifications (notification_id, user_id, notification_type, message, timestamp, read) VALUES (?, ?, ?, ?, ?, ?)"
-    );
+    // 2. Build a lightweight Notification and send it to the DO
+    let notification = Notification {
+        notification_id: Uuid::new_v4().to_string(),
+        user_id: user_id.to_string(),
+        notification_type,
+        message: message.to_string(),
+        timestamp: Utc::now().timestamp(),
+        read: Read::No,
+        metadata,
+    };
 
-    stmt.bind(&[
-        notification_id.into(),
-        user_id.into(),
-        notification_type.as_str().into(),
-        message.into(),
-        (timestamp as f64).into(),
-        0.into(),
-    ])?
-    .run()
-    .await?;
+    let request_body = serde_json::json!({
+        "user_id": user_id,
+        "op": {
+            "AddNotificationInternal": notification  // ⬅ You’ll need to add this Op variant
+        }
+    });
+
+    let mut init = RequestInit::new();
+    init.with_method(Method::Post);
+    init.with_body(Some(JsValue::from_str(&request_body.to_string())));
+
+    let req = Request::new_with_init("https://dummy-url", &init)?;
+
+    stub.fetch_with_request(req).await?;
 
     Ok(())
 }

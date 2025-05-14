@@ -77,3 +77,22 @@ pub fn calculate_product(user_data: &mut UserData) {
 pub fn calculate_king_alien_lvl(user_data: &mut UserData) {
     user_data.game_state.king_lvl = user_data.game_state.active_aliens.iter().sum::<usize>();
 }
+
+#[derive(serde::Deserialize)]
+struct UserIdRow {
+    user_id: String,
+}
+
+pub async fn find_user_id_by_referral_code(
+    d1: &D1Database,
+    code: &str,
+) -> Result<Option<String>, worker::Error> {
+    let stmt = d1.prepare("SELECT user_id FROM social_data WHERE referal_code = ?");
+    let res = stmt.bind(&[code.into()])?.first::<UserIdRow>(None).await;
+
+    match res {
+        Ok(Some(row)) => Ok(Some(row.user_id)),
+        Ok(None) => Ok(None),
+        Err(e) => Err(e),
+    }
+}

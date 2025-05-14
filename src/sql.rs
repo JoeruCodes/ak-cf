@@ -1,9 +1,11 @@
+use crate::notification::Read;
 use worker::{D1Database, Response, Result};
 
 use crate::types::UserData;
 use crate::utils::league_to_string;
 use crate::utils::{convert_badges_to_json, convert_power_ups_to_json};
 use crate::JsValue;
+use serde_json::to_string as to_json;
 
 pub async fn create_table_if_not_exists(d1: &D1Database) -> Result<Response> {
     // SQLite doesn't support ENUM types or array types, so we need to modify our approach
@@ -71,16 +73,18 @@ pub async fn create_table_if_not_exists(d1: &D1Database) -> Result<Response> {
         FOREIGN KEY (user_id) REFERENCES user_profile(user_id)
     );
 
-    -- Create Notifications table
-CREATE TABLE IF NOT EXISTS notifications (
+    -- Create Notifications table with metadata
+    CREATE TABLE IF NOT EXISTS notifications (
     notification_id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     notification_type TEXT NOT NULL,
     message TEXT NOT NULL,
     timestamp INTEGER NOT NULL,
-    read INTEGER NOT NULL,
+    read TEXT NOT NULL,
+    metadata TEXT, -- <--- new field
     FOREIGN KEY (user_id) REFERENCES user_profile(user_id)
-);
+    );
+
     "#,
     );
 
@@ -176,6 +180,40 @@ pub async fn insert_new_user(data: &UserData, d1: &D1Database) -> Result<()> {
         .bind(&[user_id.into(), league_str.into()])?
         .run()
         .await?;
+
+
+    //new added
+    //new added
+    //new added
+    //new added
+    //new added
+    //new added
+
+    for notification in &data.notifications {
+    let metadata_json = notification
+        .metadata
+        .as_ref()
+        .map(|m| to_json(m).unwrap_or_else(|_| "{}".to_string()))
+        .unwrap_or("null".to_string());
+
+    let stmt_notify = d1.prepare(
+        "INSERT INTO notifications (notification_id, user_id, notification_type, message, timestamp, read, metadata)
+         VALUES (?, ?, ?, ?, ?, ?, ?)",
+    );
+
+    stmt_notify
+        .bind(&[
+            notification.notification_id.clone().into(),
+            notification.user_id.clone().into(),
+            notification.notification_type.as_str().into(),
+            notification.message.clone().into(),
+            (notification.timestamp as f64).into(),
+            notification.read.as_str().into(), // ✅ now storing as string "Yes"/"No"
+            metadata_json.into(),
+        ])?
+        .run()
+        .await?;
+}
 
     Ok(())
 }
@@ -276,6 +314,36 @@ pub async fn update_user_data(data: &UserData, d1: &D1Database) -> Result<()> {
         .bind(&[league_str.into(), user_id.into()])? // WHERE clause
         .run()
         .await?;
+
+
+
+    for notification in &data.notifications {
+    if (notification.read == Read::No) {
+        let metadata_json = notification
+            .metadata
+            .as_ref()
+            .map(|m| to_json(m).unwrap_or_else(|_| "{}".to_string()))
+            .unwrap_or("null".to_string());
+
+        let stmt_notify = d1.prepare(
+            "INSERT OR IGNORE INTO notifications (notification_id, user_id, notification_type, message, timestamp, read, metadata)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        );
+
+        stmt_notify
+    .bind(&[
+        notification.notification_id.clone().into(),
+        notification.user_id.clone().into(),
+        notification.notification_type.as_str().into(),
+        notification.message.clone().into(),
+        (notification.timestamp as f64).into(),
+        notification.read.as_str().into(), // ✅ now storing as string "Yes"/"No"
+        metadata_json.into(),
+    ])?
+    .run()
+    .await?;
+    }
+}
 
     Ok(())
 }
