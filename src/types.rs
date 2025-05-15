@@ -54,7 +54,9 @@ pub enum Op {
     MoveAlienInGrid(usize, usize),
     AddNotificationInternal(Notification),
     MarkNotificationRead(String), // Takes notification_id as input
-    UseReferralCode(String)
+    UseReferralCode(String),
+    GetProduct,
+    UpdateDbFromDo,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

@@ -186,7 +186,8 @@ impl UserData {
                 calculate_product(self);
                 Response::ok(
                     json!({
-                        "iq": self.progress.iq
+                        "iq": self.progress.iq,
+                        "product" : self.progress.product
                     })
                     .to_string(),
                 )
@@ -409,6 +410,24 @@ impl UserData {
                     }
                 }
             }
+            Op::GetProduct => Response::ok(
+                json!({
+                    "product": self.progress.product
+                })
+                .to_string(),
+            ),
+            Op::UpdateDbFromDo => {
+    match crate::sql::update_user_data(self, d1).await {
+        Ok(_) => Response::ok(json!({
+            "status": "Database successfully updated from DO"
+        }).to_string()),
+        Err(e) => {
+            console_error!("Error updating DB from DO: {:?}", e);
+            Response::error("Failed to update DB", 500)
+        }
+    }
+}
+
         }
     }
 }
