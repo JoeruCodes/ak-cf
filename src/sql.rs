@@ -85,6 +85,8 @@ pub async fn create_table_if_not_exists(d1: &D1Database) -> Result<Response> {
     FOREIGN KEY (user_id) REFERENCES user_profile(user_id)
     );
 
+
+    CREATE INDEX IF NOT EXISTS idx_product ON progress(product);
     "#,
     );
 
