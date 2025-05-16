@@ -106,6 +106,7 @@ dependencies = [
  "futures",
  "futures-util",
  "getrandom 0.2.15",
+ "once_cell",
  "rand",
  "serde",
  "serde_json",

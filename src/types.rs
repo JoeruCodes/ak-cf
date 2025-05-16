@@ -1,14 +1,14 @@
+use chrono::Utc;
 use rand::{
     distributions::{Alphanumeric, DistString},
     thread_rng, Rng,
 };
 use serde::{Deserialize, Serialize};
-use worker::{console_log, Date};
 use uuid::Uuid;
-use chrono::Utc;
+use worker::{console_log, Date};
 
 use crate::notification::{Notification, Read};
-use crate::notification::NotificationType;
+use crate::{daily_task::{SocialPlatform,Links}, notification::NotificationType};
 
 // #[derive(Serialize, Deserialize, Debug, Clone)]
 // pub struct Notification {
@@ -56,6 +56,8 @@ pub enum Op {
     MarkNotificationRead(String), // Takes notification_id as input
     UseReferralCode(String),
     UpdateDbFromDo,
+    GenerateDailyTasks,
+    CheckDailyTask(Option<String>)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -128,6 +130,14 @@ pub struct Progress {
 }
 
 #[derive(Deserialize, Clone, Debug, Serialize)]
+pub struct DailyProgress {
+    pub links: Vec<Links>,
+    pub daily_merge: (usize, usize, bool),
+    pub daily_annotate: (usize, usize, bool),
+    pub daily_powerups: (usize, usize, bool),
+}
+
+#[derive(Deserialize, Clone, Debug, Serialize)]
 pub struct SocialData {
     pub players_referred: usize,
     pub referal_code: String,
@@ -141,6 +151,7 @@ pub struct UserData {
     pub social: SocialData,
     pub league: LeagueType,
     pub notifications: Vec<Notification>, // <-- added this
+    pub daily: DailyProgress,
 }
 
 impl Default for UserData {
@@ -181,7 +192,13 @@ impl Default for UserData {
                     .collect(),
             },
             league: LeagueType::Bronze,
-            notifications: Vec::new(), // <-- added this
+            notifications: Vec::new(), // <-- added this,
+            daily: DailyProgress {
+                links: Vec::new(),
+                daily_merge: (0, 0, false),
+                daily_annotate: (0, 0, false),
+                daily_powerups: (0, 0, false),
+            },
         };
 
         for i in 0..5 {
@@ -219,6 +236,4 @@ impl UserData {
             self.profile.last_login = current_time;
         }
     }
-
-    
 }

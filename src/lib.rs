@@ -11,6 +11,7 @@ mod sql;
 mod types;
 mod utils;
 mod leaderboard;
+mod daily_task;
 
 #[durable_object]
 struct UserDataWrapper {

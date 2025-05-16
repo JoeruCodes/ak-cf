@@ -1,5 +1,8 @@
+use crate::daily_task::Links;
+use crate::daily_task::*;
 use crate::notification::{push_notification_to_user_do, NotificationType};
 use crate::utils::find_user_id_by_referral_code;
+use rand::Rng;
 use serde_json::json;
 use worker::{console_error, console_log, D1Database, Env, Response, Result};
 
@@ -32,6 +35,7 @@ impl UserData {
                         0
                     };
                 self.game_state.total_merged_aliens += 1;
+                self.daily.daily_merge.0 += 1;
                 calculate_king_alien_lvl(self);
                 Response::ok(
                     json!({
@@ -39,7 +43,8 @@ impl UserData {
                         "inventory_aliens": self.game_state.inventory_aliens,
                         "total_merged_aliens": self.game_state.total_merged_aliens,
                         "king_lvl": self.game_state.king_lvl,
-                        "product" : self.progress.product
+                        "product" : self.progress.product,
+                        "daily_merge" : self.daily.daily_merge
                     })
                     .to_string(),
                 )
@@ -121,13 +126,15 @@ impl UserData {
                 }
 
                 calculate_king_alien_lvl(self);
+                self.daily.daily_powerups.0 += 1;
 
                 Response::ok(
                     json!({
                         "active_aliens": self.game_state.active_aliens,
                         "power_ups": self.game_state.power_ups,
                         "king_lvl": self.game_state.king_lvl,
-                        "product" : self.progress.product
+                        "product" : self.progress.product,
+                        "daily_powerups" : self.daily.daily_powerups,
                     })
                     .to_string(),
                 )
@@ -300,9 +307,11 @@ impl UserData {
             }
             Op::DeleteAlienFromActive(idx) => {
                 self.game_state.active_aliens[*idx] = 0;
+                calculate_king_alien_lvl(self);
                 Response::ok(
                     json!({
-                        "active_aliens": self.game_state.active_aliens
+                        "active_aliens": self.game_state.active_aliens,
+                        "king_lvl" : self.game_state.king_lvl,
                     })
                     .to_string(),
                 )
@@ -414,18 +423,67 @@ impl UserData {
                     }
                 }
             }
-            Op::UpdateDbFromDo => {
-    match crate::sql::update_user_data(self, d1).await {
-        Ok(_) => Response::ok(json!({
-            "status": "Database successfully updated from DO"
-        }).to_string()),
-        Err(e) => {
-            console_error!("Error updating DB from DO: {:?}", e);
-            Response::error("Failed to update DB", 500)
-        }
-    }
-}
+            Op::UpdateDbFromDo => match crate::sql::update_user_data(self, d1).await {
+                Ok(_) => Response::ok(
+                    json!({
+                        "status": "Database successfully updated from DO"
+                    })
+                    .to_string(),
+                ),
+                Err(e) => {
+                    console_error!("Error updating DB from DO: {:?}", e);
+                    Response::error("Failed to update DB", 500)
+                }
+            },
+            Op::GenerateDailyTasks => {
+                let now = worker::Date::now().as_millis() as u64 / 1000;
+                let q_seconds = 5; // 1 day interval
 
+                let last_login = self.profile.last_login;
+
+                if now - last_login < q_seconds && !self.daily.links.is_empty() {
+                    return Response::from_json(&self.daily);
+                }
+
+                let mut rng = rand::thread_rng();
+                let random_links = get_random_links(2)
+                    .into_iter()
+                    .map(|sl| Links {
+                        url: sl.url,
+                        platform: sl.platform,
+                        visited: false,
+                    })
+                    .collect();
+
+                self.daily.links = random_links;
+                self.daily.daily_merge = (0, rng.gen_range(15..=26), false);
+                self.daily.daily_annotate = (0, rng.gen_range(3..=7), false);
+                self.daily.daily_powerups = (0, rng.gen_range(2..=6), false);
+                self.profile.last_login = now;
+
+                Response::from_json(&self.daily)
+            }
+            Op::CheckDailyTask(maybe_url) => {
+                // Check if a link was passed and mark it as visited if matched
+                if let Some(url) = maybe_url {
+                    for link in &mut self.daily.links {
+                        if link.url == *url {
+                            link.visited = true;
+                        }
+                    }
+                }
+
+                let check_and_mark = |(current, target, _): (usize, usize, bool)| {
+                    let is_complete = current >= target;
+                    (current, target, is_complete)
+                };
+
+                self.daily.daily_merge = check_and_mark(self.daily.daily_merge);
+                self.daily.daily_annotate = check_and_mark(self.daily.daily_annotate);
+                self.daily.daily_powerups = check_and_mark(self.daily.daily_powerups);
+
+                Response::from_json(&self.daily)
+            }
         }
     }
 }
