@@ -55,7 +55,6 @@ pub enum Op {
     AddNotificationInternal(Notification),
     MarkNotificationRead(String), // Takes notification_id as input
     UseReferralCode(String),
-    GetProduct,
     UpdateDbFromDo,
 }
 

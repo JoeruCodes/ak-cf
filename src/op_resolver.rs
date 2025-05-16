@@ -38,7 +38,8 @@ impl UserData {
                         "active_aliens": self.game_state.active_aliens,
                         "inventory_aliens": self.game_state.inventory_aliens,
                         "total_merged_aliens": self.game_state.total_merged_aliens,
-                        "king_lvl": self.game_state.king_lvl
+                        "king_lvl": self.game_state.king_lvl,
+                        "product" : self.progress.product
                     })
                     .to_string(),
                 )
@@ -68,7 +69,8 @@ impl UserData {
                         "active_aliens": self.game_state.active_aliens,
                         "inventory_aliens": self.game_state.inventory_aliens,
                         "total_merged_aliens": self.game_state.total_merged_aliens,
-                        "king_lvl": self.game_state.king_lvl
+                        "king_lvl": self.game_state.king_lvl,
+                        "product" : self.progress.product
                     })
                     .to_string(),
                 )
@@ -124,7 +126,8 @@ impl UserData {
                     json!({
                         "active_aliens": self.game_state.active_aliens,
                         "power_ups": self.game_state.power_ups,
-                        "king_lvl": self.game_state.king_lvl
+                        "king_lvl": self.game_state.king_lvl,
+                        "product" : self.progress.product
                     })
                     .to_string(),
                 )
@@ -197,7 +200,8 @@ impl UserData {
                 calculate_product(self);
                 Response::ok(
                     json!({
-                        "social_score": self.progress.social_score
+                        "social_score": self.progress.social_score,
+                        "product" : self.progress.product
                     })
                     .to_string(),
                 )
@@ -410,12 +414,6 @@ impl UserData {
                     }
                 }
             }
-            Op::GetProduct => Response::ok(
-                json!({
-                    "product": self.progress.product
-                })
-                .to_string(),
-            ),
             Op::UpdateDbFromDo => {
     match crate::sql::update_user_data(self, d1).await {
         Ok(_) => Response::ok(json!({
