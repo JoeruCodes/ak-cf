@@ -106,9 +106,7 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
         let RegisterBody { user_id, password } = req.json().await?;
         let op = Op::Register(password);
 
-        let response = forward_op_to_do(&env, &DurableObjectAugmentedMsg { user_id, op }).await?;
-
-        return Ok(response);
+        return forward_op_to_do(&env, &DurableObjectAugmentedMsg { user_id, op }).await;
     }
     console_log!("Not a leaderboard or register");
 
