@@ -119,6 +119,8 @@ if path == "/api/leaderboard" {
                     }
                 };
 
+                let mut user_id = None;
+
                 while let Some(event_result) = events.try_next().await.transpose() {
                     match event_result {
                         Ok(WebsocketEvent::Message(msg)) => {
@@ -136,6 +138,10 @@ if path == "/api/leaderboard" {
                                 data.op,
                                 data.user_id
                             );
+
+                            if user_id.is_none(){
+                                user_id = Some(data.user_id.clone());
+                            }
 
                             match forward_op_to_do(&env_clone, &data).await {
                                 Ok(mut res) => match res.text().await {
@@ -176,10 +182,20 @@ if path == "/api/leaderboard" {
                                 }
                             }
                         }
-                        Ok(WebsocketEvent::Close(close_event)) => {
-                            console_log!("WebSocket closed: {:?}", close_event);
+                        Ok(WebsocketEvent::Close(_)) => {
+
+                            let Some(user_id) = &user_id else{
+                                console_log!("No shit sherlock!");
+                                break;
+                            };
+
+                            let res= forward_op_to_do(&env_clone, &WsMsg { user_id: user_id.clone(), op: Op::SyncData }).await;
+
+                            console_log!("Sync res: {:?}", res);
+
                             break;
-                        }
+                        },
+                        
                         Err(e) => {
                             console_log!("WebSocket event error: {:?}", e);
                             break;

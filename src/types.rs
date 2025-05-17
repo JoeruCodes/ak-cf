@@ -57,7 +57,8 @@ pub enum Op {
     UseReferralCode(String),
     UpdateDbFromDo,
     GenerateDailyTasks,
-    CheckDailyTask(Option<String>)
+    CheckDailyTask(Option<String>),
+    SyncData
 }
 
 #[derive(Serialize, Deserialize, Debug)]

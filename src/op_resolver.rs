@@ -483,6 +483,15 @@ impl UserData {
                 self.daily.daily_powerups = check_and_mark(self.daily.daily_powerups);
 
                 Response::from_json(&self.daily)
+            },
+            Op::SyncData => {
+                match crate::sql::update_user_data(self, d1).await {
+                    Ok(_) => Response::ok("Data synced successfully"),
+                    Err(e) => {
+                        console_error!("Error syncing data: {:?}", e);
+                        Response::error("Failed to sync data", 500)
+                    }
+                }
             }
         }
     }
