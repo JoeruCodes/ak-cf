@@ -241,34 +241,50 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
                             }
                         }
                         Ok(WebsocketEvent::Close(_)) => {
-                            let res = forward_op_to_do(
+                            console_log!("WebSocket connection closed for user: {}", user_id);
+                            match forward_op_to_do(
                                 &env_clone,
                                 &DurableObjectAugmentedMsg {
                                     user_id: user_id.clone(),
                                     op: Op::SyncData,
                                 },
                             )
-                            .await;
-
-                            console_log!("Sync res: {:?}", res);
-
+                            .await
+                            {
+                                Ok(mut response) => {
+                                    match response.text().await {
+                                        Ok(text) => console_log!("SyncData on close for user {} successful: {}", user_id, text),
+                                        Err(e) => console_error!("SyncData on close for user {}: failed to read response body: {}", user_id, e),
+                                    }
+                                }
+                                Err(e) => {
+                                    console_error!("SyncData on close for user {} failed: {}", user_id, e);
+                                }
+                            }
                             break;
                         }
 
                         Err(e) => {
-                            console_log!("Errored!: {}", e);
-
-                            let res = forward_op_to_do(
+                            console_error!("WebSocket event stream error for user {}: {}", user_id, e);
+                            match forward_op_to_do(
                                 &env_clone,
                                 &DurableObjectAugmentedMsg {
                                     user_id: user_id.clone(),
                                     op: Op::SyncData,
                                 },
                             )
-                            .await;
-
-                            console_log!("Sync res: {:?}", res);
-
+                            .await
+                            {
+                                Ok(mut response) => {
+                                    match response.text().await {
+                                        Ok(text) => console_log!("SyncData on error for user {} successful: {}", user_id, text),
+                                        Err(e_resp) => console_error!("SyncData on error for user {}: failed to read response body: {}", user_id, e_resp),
+                                    }
+                                }
+                                Err(e_fwd) => {
+                                    console_error!("SyncData on error for user {} failed: {}", user_id, e_fwd);
+                                }
+                            }
                             break;
                         }
                     }
