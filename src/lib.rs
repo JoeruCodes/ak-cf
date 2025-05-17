@@ -1,17 +1,19 @@
 use futures::TryStreamExt;
-use types::{Op, UserData, WsMsg};
+use serde::{Deserialize, Serialize};
+use sql::UserCredentials;
+use types::{DurableObjectAugmentedMsg, Op, UserData, WsMsg};
 use utils::is_registered;
 use wasm_bindgen::JsValue;
 use worker::*;
 
+mod daily_task;
+mod leaderboard;
 mod notification;
 mod op_resolver;
 mod registry;
 mod sql;
 mod types;
 mod utils;
-mod leaderboard;
-mod daily_task;
 
 #[durable_object]
 struct UserDataWrapper {
@@ -26,7 +28,7 @@ impl DurableObject for UserDataWrapper {
     }
 
     async fn fetch(&mut self, mut req: Request) -> Result<Response> {
-        let op_request: WsMsg = match req.json().await {
+        let op_request: DurableObjectAugmentedMsg = match req.json().await {
             Ok(op) => op,
             Err(e) => {
                 console_log!("Failed to parse OpRequest: {:?}", e);
@@ -53,11 +55,11 @@ impl DurableObject for UserDataWrapper {
         console_log!("Host: {:?}", req.url());
 
         if !is_registered(&self.env.d1("D1_DATABASE").unwrap(), &op_request.user_id).await
-            && op_request.op != Op::Register
+            && !matches!(op_request.op, Op::Register(_))
         {
             return Response::error("User not registered", 400);
         } else if is_registered(&self.env.d1("D1_DATABASE").unwrap(), &op_request.user_id).await
-            && op_request.op == Op::Register
+            && matches!(op_request.op, Op::Register(_))
         {
             return Response::error("User already registered", 400);
         }
@@ -79,30 +81,68 @@ impl DurableObject for UserDataWrapper {
     }
 }
 
-#[event(fetch)]
-pub async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
-
-let url = req.url()?;
-let path = url.path();
-
-if path == "/api/leaderboard" {
-    return leaderboard::handle_leaderboard(req, &env).await;
+#[derive(Deserialize, Serialize)]
+struct RegisterBody{
+    user_id: String,
+    password: String,
 }
 
+#[event(fetch)]
+pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
+    console_log!("Fetching");
+    let url = req.url()?;
+    let path = url.path();
+
+    console_log!("Path: {:?}", path);
+    if path == "/api/leaderboard" {
+        return leaderboard::handle_leaderboard(req, &env).await;
+    }else if path == "/api/register"{
+        let RegisterBody{user_id, password} = req.json().await?;
+        let op = Op::Register(password);
+
+        let response = forward_op_to_do(&env, &DurableObjectAugmentedMsg { user_id, op }).await?;
+
+        return Ok(response);
+    }
+    console_log!("Not a leaderboard or register");
 
     if let Some(upgrade_header) = req.headers().get("Upgrade")? {
-        let Some(auth_header) = req.headers().get("Authorization")? else {
-            return Response::error("Unauthorized", 401);
+        let Some(username_header) = req.headers().get("username")? else {
+            // If username header is missing, we can immediately return Unauthorized.
+            console_log!("Unauthorized: Missing username");
+            return Response::error("Unauthorized: Missing username", 401);
+        };
+        let Some(password_header) = req.headers().get("password")? else {
+            console_log!("Unauthorized: Missing password");
+            // If password header is missing, we can immediately return Unauthorized.
+            return Response::error("Unauthorized: Missing password", 401);
         };
 
-        if auth_header
-            != env
-                .var("AUTH_TOKEN")
-                .map(|v| v.to_string())
-                .unwrap_or("joel".to_string())
-        {
-            return Response::error("Unauthorized", 401);
+        console_log!("Username header: {:?}, Password header: {:?}", username_header, password_header);
+        // Authenticate against the database
+        let db = env.d1("D1_DATABASE")?;
+        console_log!("Database");
+        match sql::get_user_credentials(&db, &username_header).await {
+            Ok(Some(UserCredentials{user_id, password})) => {
+                console_log!("db_username: {:?}, db_password: {:?}", user_id, password);
+                if user_id == username_header && password == password_header {
+                    // Credentials match, proceed with WebSocket upgrade
+                } else {
+                    // Password doesn't match
+                    return Response::error("Unauthorized: Invalid credentials", 401);
+                }
+            }
+            Ok(None) => {
+                // User not found
+                console_log!("Unauthorized: User not found");
+                return Response::error("Unauthorized: User not found", 401);
+            }
+            Err(e) => {
+                console_error!("Database error during authentication: {:?}", e);
+                return Response::error("Internal Server Error", 500);
+            }
         }
+
         if upgrade_header.to_lowercase() == "websocket" {
             let pair = WebSocketPair::new()?;
             let client = pair.client;
@@ -119,9 +159,9 @@ if path == "/api/leaderboard" {
                     }
                 };
 
-                let mut user_id = None;
-
                 while let Some(event_result) = events.try_next().await.transpose() {
+                    let user_id = username_header.clone();
+
                     match event_result {
                         Ok(WebsocketEvent::Message(msg)) => {
                             let data: WsMsg = match msg.json() {
@@ -134,16 +174,25 @@ if path == "/api/leaderboard" {
                             };
 
                             console_log!(
-                                "Received operation {:?} from wallet_address: {}",
+                                "Received {:?} operation from {:?}",
                                 data.op,
-                                data.user_id
+                                user_id.clone()
                             );
 
-                            if user_id.is_none(){
-                                user_id = Some(data.user_id.clone());
+                            if matches!(data.op, Op::Register(_)){
+                                let _ = server.send_with_str(&format!("Error: Register operation not allowed"));
+                                continue;
                             }
-
-                            match forward_op_to_do(&env_clone, &data).await {
+                            
+                            match forward_op_to_do(
+                                &env_clone,
+                                &DurableObjectAugmentedMsg {
+                                    user_id,
+                                    op: data.op,
+                                },
+                            )
+                            .await
+                            {
                                 Ok(mut res) => match res.text().await {
                                     Ok(response_text) => {
                                         console_log!(
@@ -183,28 +232,31 @@ if path == "/api/leaderboard" {
                             }
                         }
                         Ok(WebsocketEvent::Close(_)) => {
-
-                            let Some(user_id) = &user_id else{
-                                console_log!("No shit sherlock!");
-                                break;
-                            };
-
-                            let res= forward_op_to_do(&env_clone, &WsMsg { user_id: user_id.clone(), op: Op::SyncData }).await;
+                            let res = forward_op_to_do(
+                                &env_clone,
+                                &DurableObjectAugmentedMsg {
+                                    user_id: user_id.clone(),
+                                    op: Op::SyncData,
+                                },
+                            )
+                            .await;
 
                             console_log!("Sync res: {:?}", res);
 
                             break;
-                        },
-                        
+                        }
+
                         Err(e) => {
                             console_log!("Errored!: {}", e);
 
-                            let Some(user_id) = &user_id else{
-                                console_log!("No shit sherlock!");
-                                break;
-                            };
-
-                            let res= forward_op_to_do(&env_clone, &WsMsg { user_id: user_id.clone(), op: Op::SyncData }).await;
+                            let res = forward_op_to_do(
+                                &env_clone,
+                                &DurableObjectAugmentedMsg {
+                                    user_id: user_id.clone(),
+                                    op: Op::SyncData,
+                                },
+                            )
+                            .await;
 
                             console_log!("Sync res: {:?}", res);
 
@@ -221,7 +273,7 @@ if path == "/api/leaderboard" {
     Response::ok("This endpoint upgrades to WebSockets.")
 }
 
-async fn forward_op_to_do(env: &Env, data: &WsMsg) -> Result<Response> {
+async fn forward_op_to_do(env: &Env, data: &DurableObjectAugmentedMsg) -> Result<Response> {
     console_log!("Starting forward_op_to_do for user: {}", data.user_id);
 
     let do_namespace = env.durable_object("USER_DATA_WRAPPER")?;

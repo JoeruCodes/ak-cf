@@ -8,7 +8,10 @@ use uuid::Uuid;
 use worker::{console_log, Date};
 
 use crate::notification::{Notification, Read};
-use crate::{daily_task::{SocialPlatform,Links}, notification::NotificationType};
+use crate::{
+    daily_task::{Links, SocialPlatform},
+    notification::NotificationType,
+};
 
 // #[derive(Serialize, Deserialize, Debug, Clone)]
 // pub struct Notification {
@@ -35,7 +38,7 @@ pub enum Op {
     UsePowerup(usize, usize), //changed
     SpawnPowerup(PowerUpKind),
     GetData,
-    Register,
+    Register(String),
     AwardBadge(BadgesKind),
     UpdateEmail(String),
     UpdatePfp(Option<String>),
@@ -58,11 +61,16 @@ pub enum Op {
     UpdateDbFromDo,
     GenerateDailyTasks,
     CheckDailyTask(Option<String>),
-    SyncData
+    SyncData,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WsMsg {
+    pub op: Op,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct DurableObjectAugmentedMsg {
     pub user_id: String,
     pub op: Op,
 }

@@ -1,13 +1,11 @@
-use uuid::Uuid;
-use worker::*;
+use crate::{Env, JsValue};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::{Env,JsValue};
+use uuid::Uuid;
+use worker::*;
 
-
-
-#[derive(Deserialize, Clone, Debug, Serialize,PartialEq)]
+#[derive(Deserialize, Clone, Debug, Serialize, PartialEq)]
 pub struct Notification {
     pub notification_id: String,
     pub user_id: String,
@@ -17,7 +15,7 @@ pub struct Notification {
     pub read: Read,
 
     // ✅ New field for dynamic data
-    pub metadata: Option<HashMap<String, String>>
+    pub metadata: Option<HashMap<String, String>>,
 }
 
 #[derive(Deserialize, Clone, Debug, Serialize, PartialEq)]
@@ -28,9 +26,9 @@ pub enum NotificationType {
 }
 
 #[derive(Deserialize, Clone, Debug, Serialize, PartialEq)]
-pub enum Read{
+pub enum Read {
     Yes,
-    No
+    No,
 }
 
 impl NotificationType {
@@ -43,12 +41,12 @@ impl NotificationType {
     }
 }
 
-impl Read{
-    pub fn as_str(&self) -> &'static str{
-        match self{
+impl Read {
+    pub fn as_str(&self) -> &'static str {
+        match self {
             Read::Yes => "Yes",
             Read::No => "No",
-            }
+        }
     }
 }
 

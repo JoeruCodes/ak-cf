@@ -1,9 +1,9 @@
 // daily_task.rs
+use once_cell::sync::Lazy;
 use rand::{seq::SliceRandom, Rng};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
-use once_cell::sync::Lazy;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum SocialPlatform {
@@ -16,11 +16,11 @@ pub enum SocialPlatform {
     Facebook,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize,PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Links {
     pub url: String,
     pub platform: SocialPlatform,
-    pub visited:bool,
+    pub visited: bool,
 }
 
 // Global mutable container of all available links
@@ -29,22 +29,22 @@ static LINK_STORAGE: Lazy<Mutex<Vec<Links>>> = Lazy::new(|| {
         Links {
             url: "https://youtube.com/campaign1".into(),
             platform: SocialPlatform::YouTube,
-            visited:false,
+            visited: false,
         },
         Links {
             url: "https://twitter.com/promo123".into(),
             platform: SocialPlatform::Twitter,
-            visited:false,
+            visited: false,
         },
         Links {
             url: "https://linkedin.com/offer".into(),
             platform: SocialPlatform::LinkedIn,
-            visited:false,
+            visited: false,
         },
         Links {
             url: "https://discord.gg/community".into(),
             platform: SocialPlatform::Discord,
-            visited:false,
+            visited: false,
         },
     ])
 });

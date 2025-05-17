@@ -1,6 +1,6 @@
-use worker::{D1Database, Env, Request, Response, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use worker::{D1Database, Env, Request, Response, Result};
 
 #[derive(Serialize)]
 pub struct LeaderboardEntry {
@@ -39,14 +39,18 @@ pub async fn handle_leaderboard(mut req: Request, env: &Env) -> Result<Response>
 }
 
 // Fetch top 100 players in range
-async fn get_players_in_range(d1: &D1Database, p_min: usize, p_max: usize) -> Result<Vec<LeaderboardEntry>> {
+async fn get_players_in_range(
+    d1: &D1Database,
+    p_min: usize,
+    p_max: usize,
+) -> Result<Vec<LeaderboardEntry>> {
     let stmt = d1.prepare(
         "SELECT user_profile.user_id, product
          FROM user_profile
          JOIN progress ON user_profile.user_id = progress.user_id
          WHERE product BETWEEN ? AND ?
          ORDER BY product DESC
-         LIMIT 100"
+         LIMIT 100",
     );
 
     #[derive(serde::Deserialize)]
@@ -55,11 +59,14 @@ async fn get_players_in_range(d1: &D1Database, p_min: usize, p_max: usize) -> Re
         product: usize,
     }
 
-    let rows: Vec<Row> = stmt.bind(&[p_min.into(), p_max.into()])?
-                             .all().await?
-                             .results::<Row>()?;
+    let rows: Vec<Row> = stmt
+        .bind(&[p_min.into(), p_max.into()])?
+        .all()
+        .await?
+        .results::<Row>()?;
 
-    let entries = rows.into_iter()
+    let entries = rows
+        .into_iter()
         .map(|row| LeaderboardEntry {
             user_id: row.user_id,
             product: row.product,
@@ -70,12 +77,17 @@ async fn get_players_in_range(d1: &D1Database, p_min: usize, p_max: usize) -> Re
 }
 
 // Get user rank even if outside top 100
-async fn get_user_rank(d1: &D1Database, p_min: usize, p_max: usize, user_id: &str) -> Result<usize> {
+async fn get_user_rank(
+    d1: &D1Database,
+    p_min: usize,
+    p_max: usize,
+    user_id: &str,
+) -> Result<usize> {
     let stmt = d1.prepare(
         "SELECT COUNT(*) + 1 as rank
          FROM progress
          WHERE product BETWEEN ? AND ?
-         AND product > (SELECT product FROM progress WHERE user_id = ?)"
+         AND product > (SELECT product FROM progress WHERE user_id = ?)",
     );
 
     #[derive(serde::Deserialize)]
@@ -83,9 +95,11 @@ async fn get_user_rank(d1: &D1Database, p_min: usize, p_max: usize, user_id: &st
         rank: usize,
     }
 
-    let row: RankRow = stmt.bind(&[p_min.into(), p_max.into(), user_id.into()])?
-                           .first::<RankRow>(None).await?
-                           .ok_or_else(|| worker::Error::RustError("User not found".to_string()))?;
+    let row: RankRow = stmt
+        .bind(&[p_min.into(), p_max.into(), user_id.into()])?
+        .first::<RankRow>(None)
+        .await?
+        .ok_or_else(|| worker::Error::RustError("User not found".to_string()))?;
 
     Ok(row.rank)
 }

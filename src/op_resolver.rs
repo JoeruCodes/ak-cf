@@ -1,6 +1,7 @@
 use crate::daily_task::Links;
 use crate::daily_task::*;
 use crate::notification::{push_notification_to_user_do, NotificationType};
+use crate::types::DurableObjectAugmentedMsg;
 use crate::utils::find_user_id_by_referral_code;
 use rand::Rng;
 use serde_json::json;
@@ -18,7 +19,7 @@ use crate::notification::Read;
 impl UserData {
     pub async fn resolve_op(
         &mut self,
-        op_request: &WsMsg,
+        op_request: &DurableObjectAugmentedMsg,
         d1: &D1Database,
         env: &Env,
     ) -> Result<Response> {
@@ -150,8 +151,10 @@ impl UserData {
                 )
             }
             Op::GetData => Response::from_json(&self),
-            Op::Register => {
+            Op::Register(password) => {
                 console_log!("Creating tables if not exists");
+                self.profile.password = Some(password.clone());
+                
                 match insert_new_user(&self, &d1).await {
                     Ok(_) => Response::ok("User registered successfully!"),
                     Err(e) => {
@@ -483,16 +486,14 @@ impl UserData {
                 self.daily.daily_powerups = check_and_mark(self.daily.daily_powerups);
 
                 Response::from_json(&self.daily)
-            },
-            Op::SyncData => {
-                match crate::sql::update_user_data(self, d1).await {
-                    Ok(_) => Response::ok("Data synced successfully"),
-                    Err(e) => {
-                        console_error!("Error syncing data: {:?}", e);
-                        Response::error("Failed to sync data", 500)
-                    }
-                }
             }
+            Op::SyncData => match crate::sql::update_user_data(self, d1).await {
+                Ok(_) => Response::ok("Data synced successfully"),
+                Err(e) => {
+                    console_error!("Error syncing data: {:?}", e);
+                    Response::error("Failed to sync data", 500)
+                }
+            },
         }
     }
 }

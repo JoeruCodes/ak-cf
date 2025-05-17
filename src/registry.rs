@@ -4,7 +4,7 @@ use worker::*;
 
 use crate::{
     sql::update_user_data,
-    types::{Op, UserData, WsMsg},
+    types::{DurableObjectAugmentedMsg, Op, UserData, WsMsg},
 };
 
 #[event(scheduled)]
@@ -83,7 +83,7 @@ async fn run_cron_logic(env: Env) {
                 }
             };
 
-            let op_request = WsMsg {
+            let op_request = DurableObjectAugmentedMsg {
                 user_id: user_id_clone.clone(),
                 op: Op::GetData,
             };

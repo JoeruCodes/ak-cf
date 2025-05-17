@@ -1,4 +1,5 @@
 use crate::notification::Read;
+use serde::{Deserialize, Serialize};
 use worker::{D1Database, Response, Result};
 
 use crate::types::UserData;
@@ -102,8 +103,16 @@ pub async fn insert_new_user(data: &UserData, d1: &D1Database) -> Result<()> {
         .prepare("INSERT INTO user_profile (user_name,password, user_id, email, pfp, last_login) VALUES (?, ?, ?, ?, ?,?)");
     stmt_profile
         .bind(&[
-            data.profile.user_name.clone().map(JsValue::from).unwrap_or(JsValue::null()),
-            data.profile.password.clone().map(JsValue::from).unwrap_or(JsValue::null()),
+            data.profile
+                .user_name
+                .clone()
+                .map(JsValue::from)
+                .unwrap_or(JsValue::null()),
+            data.profile
+                .password
+                .clone()
+                .map(JsValue::from)
+                .unwrap_or(JsValue::null()),
             user_id.into(),
             data.profile
                 .email
@@ -183,7 +192,6 @@ pub async fn insert_new_user(data: &UserData, d1: &D1Database) -> Result<()> {
         .run()
         .await?;
 
-
     //new added
     //new added
     //new added
@@ -192,30 +200,30 @@ pub async fn insert_new_user(data: &UserData, d1: &D1Database) -> Result<()> {
     //new added
 
     for notification in &data.notifications {
-    let metadata_json = notification
-        .metadata
-        .as_ref()
-        .map(|m| to_json(m).unwrap_or_else(|_| "{}".to_string()))
-        .unwrap_or("null".to_string());
+        let metadata_json = notification
+            .metadata
+            .as_ref()
+            .map(|m| to_json(m).unwrap_or_else(|_| "{}".to_string()))
+            .unwrap_or("null".to_string());
 
-    let stmt_notify = d1.prepare(
+        let stmt_notify = d1.prepare(
         "INSERT INTO notifications (notification_id, user_id, notification_type, message, timestamp, read, metadata)
          VALUES (?, ?, ?, ?, ?, ?, ?)",
     );
 
-    stmt_notify
-        .bind(&[
-            notification.notification_id.clone().into(),
-            notification.user_id.clone().into(),
-            notification.notification_type.as_str().into(),
-            notification.message.clone().into(),
-            (notification.timestamp as f64).into(),
-            notification.read.as_str().into(), // ✅ now storing as string "Yes"/"No"
-            metadata_json.into(),
-        ])?
-        .run()
-        .await?;
-}
+        stmt_notify
+            .bind(&[
+                notification.notification_id.clone().into(),
+                notification.user_id.clone().into(),
+                notification.notification_type.as_str().into(),
+                notification.message.clone().into(),
+                (notification.timestamp as f64).into(),
+                notification.read.as_str().into(), // ✅ now storing as string "Yes"/"No"
+                metadata_json.into(),
+            ])?
+            .run()
+            .await?;
+    }
 
     Ok(())
 }
@@ -317,35 +325,52 @@ pub async fn update_user_data(data: &UserData, d1: &D1Database) -> Result<()> {
         .run()
         .await?;
 
-
-
     for notification in &data.notifications {
-    if (notification.read == Read::No) {
-        let metadata_json = notification
-            .metadata
-            .as_ref()
-            .map(|m| to_json(m).unwrap_or_else(|_| "{}".to_string()))
-            .unwrap_or("null".to_string());
+        if (notification.read == Read::No) {
+            let metadata_json = notification
+                .metadata
+                .as_ref()
+                .map(|m| to_json(m).unwrap_or_else(|_| "{}".to_string()))
+                .unwrap_or("null".to_string());
 
-        let stmt_notify = d1.prepare(
+            let stmt_notify = d1.prepare(
             "INSERT OR IGNORE INTO notifications (notification_id, user_id, notification_type, message, timestamp, read, metadata)
              VALUES (?, ?, ?, ?, ?, ?, ?)",
         );
 
-        stmt_notify
-    .bind(&[
-        notification.notification_id.clone().into(),
-        notification.user_id.clone().into(),
-        notification.notification_type.as_str().into(),
-        notification.message.clone().into(),
-        (notification.timestamp as f64).into(),
-        notification.read.as_str().into(), // ✅ now storing as string "Yes"/"No"
-        metadata_json.into(),
-    ])?
-    .run()
-    .await?;
+            stmt_notify
+                .bind(&[
+                    notification.notification_id.clone().into(),
+                    notification.user_id.clone().into(),
+                    notification.notification_type.as_str().into(),
+                    notification.message.clone().into(),
+                    (notification.timestamp as f64).into(),
+                    notification.read.as_str().into(), // ✅ now storing as string "Yes"/"No"
+                    metadata_json.into(),
+                ])?
+                .run()
+                .await?;
+        }
     }
-}
 
     Ok(())
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct UserCredentials{
+    pub user_id: String,
+    pub password: String,
+}
+
+pub async fn get_user_credentials(
+    d1: &D1Database,
+    user_id: &str,
+) -> Result<Option<UserCredentials>> {
+    let stmt = d1
+        .prepare("SELECT user_id, password FROM user_profile WHERE user_id = ?")
+        .bind(&[JsValue::from(user_id)])?;
+
+    let result: Option<UserCredentials> = stmt.first(None).await?;
+
+    Ok(result)
 }
