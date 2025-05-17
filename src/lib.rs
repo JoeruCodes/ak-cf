@@ -132,7 +132,6 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
         console_log!("Database");
         match sql::get_user_credentials(&db, &username_header).await {
             Ok(Some(UserCredentials { user_id, password })) => {
-                console_log!("db_username: {:?}, db_password: {:?}", user_id, password);
                 if user_id == username_header && password == password_header {
                     // Credentials match, proceed with WebSocket upgrade
                 } else {
