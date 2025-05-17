@@ -82,7 +82,7 @@ impl DurableObject for UserDataWrapper {
 }
 
 #[derive(Deserialize, Serialize)]
-struct RegisterBody{
+struct RegisterBody {
     user_id: String,
     password: String,
 }
@@ -124,12 +124,16 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
             return Response::error("Unauthorized: Missing password", 401);
         };
 
-        console_log!("Username header: {:?}, Password header: {:?}", username_header, password_header);
+        console_log!(
+            "Username header: {:?}, Password header: {:?}",
+            username_header,
+            password_header
+        );
         // Authenticate against the database
         let db = env.d1("D1_DATABASE")?;
         console_log!("Database");
         match sql::get_user_credentials(&db, &username_header).await {
-            Ok(Some(UserCredentials{user_id, password})) => {
+            Ok(Some(UserCredentials { user_id, password })) => {
                 console_log!("db_username: {:?}, db_password: {:?}", user_id, password);
                 if user_id == username_header && password == password_header {
                     // Credentials match, proceed with WebSocket upgrade
@@ -185,11 +189,13 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
                                 user_id.clone()
                             );
 
-                            if matches!(data.op, Op::Register(_)){
-                                let _ = server.send_with_str(&format!("Error: Register operation not allowed"));
+                            if matches!(data.op, Op::Register(_)) {
+                                let _ = server.send_with_str(&format!(
+                                    "Error: Register operation not allowed"
+                                ));
                                 continue;
                             }
-                            
+
                             match forward_op_to_do(
                                 &env_clone,
                                 &DurableObjectAugmentedMsg {

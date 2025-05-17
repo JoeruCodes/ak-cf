@@ -154,7 +154,7 @@ impl UserData {
             Op::Register(password) => {
                 console_log!("Creating tables if not exists");
                 self.profile.password = Some(password.clone());
-                
+
                 match insert_new_user(&self, &d1).await {
                     Ok(_) => Response::ok("User registered successfully!"),
                     Err(e) => {

@@ -357,7 +357,7 @@ pub async fn update_user_data(data: &UserData, d1: &D1Database) -> Result<()> {
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct UserCredentials{
+pub struct UserCredentials {
     pub user_id: String,
     pub password: String,
 }
