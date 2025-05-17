@@ -95,9 +95,15 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
 
     console_log!("Path: {:?}", path);
     if path == "/api/leaderboard" {
+        if req.method() != Method::Get {
+            return Response::error("Method Not Allowed", 405);
+        }
         return leaderboard::handle_leaderboard(req, &env).await;
-    }else if path == "/api/register"{
-        let RegisterBody{user_id, password} = req.json().await?;
+    } else if path == "/api/register" {
+        if req.method() != Method::Post {
+            return Response::error("Method Not Allowed", 405);
+        }
+        let RegisterBody { user_id, password } = req.json().await?;
         let op = Op::Register(password);
 
         let response = forward_op_to_do(&env, &DurableObjectAugmentedMsg { user_id, op }).await?;
