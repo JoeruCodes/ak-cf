@@ -197,7 +197,17 @@ if path == "/api/leaderboard" {
                         },
                         
                         Err(e) => {
-                            console_log!("WebSocket event error: {:?}", e);
+                            console_log!("Errored!: {}", e);
+
+                            let Some(user_id) = &user_id else{
+                                console_log!("No shit sherlock!");
+                                break;
+                            };
+
+                            let res= forward_op_to_do(&env_clone, &WsMsg { user_id: user_id.clone(), op: Op::SyncData }).await;
+
+                            console_log!("Sync res: {:?}", res);
+
                             break;
                         }
                     }
