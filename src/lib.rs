@@ -1,5 +1,6 @@
 use futures::TryStreamExt;
 use serde::{Deserialize, Serialize};
+use sha2::{digest::Update, Digest};
 use sql::UserCredentials;
 use types::{DurableObjectAugmentedMsg, Op, UserData, WsMsg};
 use utils::is_registered;
@@ -132,7 +133,13 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
         console_log!("Database");
         match sql::get_user_credentials(&db, &username_header).await {
             Ok(Some(UserCredentials { user_id, password })) => {
-                if user_id == username_header && password == password_header {
+                let sha256 = sha2::Sha256::new();
+
+                let password_header = sha256
+                    .chain(password_header.as_bytes())
+                    .finalize();
+
+                if user_id == username_header && password == hex::encode(password_header) {
                     // Credentials match, proceed with WebSocket upgrade
                 } else {
                     // Password doesn't match

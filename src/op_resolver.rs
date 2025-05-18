@@ -5,6 +5,8 @@ use crate::types::DurableObjectAugmentedMsg;
 use crate::utils::find_user_id_by_referral_code;
 use rand::Rng;
 use serde_json::json;
+use sha2::digest::Update;
+use sha2::Digest;
 use worker::{console_error, console_log, D1Database, Env, Response, Result};
 
 use crate::{
@@ -153,7 +155,14 @@ impl UserData {
             Op::GetData => Response::from_json(&self),
             Op::Register(password) => {
                 console_log!("Creating tables if not exists");
+                let sha256 = sha2::Sha256::new();
+                let password = sha256
+                    .chain(password.as_bytes())
+                    .finalize();
+                let password = hex::encode(password);
+
                 self.profile.password = Some(password.clone());
+
 
                 match insert_new_user(&self, &d1).await {
                     Ok(_) => Response::ok("User registered successfully!"),
