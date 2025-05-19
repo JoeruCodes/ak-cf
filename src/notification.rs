@@ -21,7 +21,7 @@ pub struct Notification {
 #[derive(Deserialize, Clone, Debug, Serialize, PartialEq)]
 pub enum NotificationType {
     Referral,
-    Reward,
+    Performance,
     System,
 }
 
@@ -35,7 +35,7 @@ impl NotificationType {
     pub fn as_str(&self) -> &'static str {
         match self {
             NotificationType::Referral => "Referral",
-            NotificationType::Reward => "Reward",
+            NotificationType::Performance => "Performance",
             NotificationType::System => "System",
         }
     }
@@ -48,6 +48,13 @@ impl Read {
             Read::No => "No",
         }
     }
+}
+
+#[derive(Deserialize)]
+pub struct TaskResultInput {
+    pub player_ranking: Vec<String>,      // e.g. ["addr1", "addr2", ..., "addr5"]
+    pub flagged_players: Vec<String>,     // subset of player_ranking
+    pub datapoint_id: String,             // for metadata
 }
 
 pub async fn push_notification_to_user_do(
@@ -90,3 +97,61 @@ pub async fn push_notification_to_user_do(
 
     Ok(())
 }
+
+
+pub async fn notify_task_result(input: TaskResultInput, env: &Env) -> Result<()> {
+    let unflagged_players: Vec<_> = input
+        .player_ranking
+        .iter()
+        .filter(|user_id| !input.flagged_players.contains(user_id))
+        .collect();
+
+    for user_id in &input.player_ranking {
+        let is_flagged = input.flagged_players.contains(user_id);
+
+        let (message, akai, iq) = if is_flagged {
+            ("You did the task wrong.".to_string(), -10, -15)
+        } else {
+            let rank = unflagged_players
+                .iter()
+                .position(|uid| *uid == user_id)
+                .unwrap(); // Safe since it's in player_ranking but not flagged
+
+            let (akai, iq) = match rank {
+                0 => (20, 10),
+                1 => (15, 7),
+                2 => (10, 5),
+                3 => (5, 3),
+                4 => (2, 1),
+                _ => (0, 0),
+            };
+
+            (
+                format!(
+                    "You ranked {} out of {} unflagged players.",
+                    rank + 1,
+                    unflagged_players.len()
+                ),
+                akai,
+                iq,
+            )
+        };
+
+        let mut metadata = HashMap::new();
+        metadata.insert("akai_earned".to_string(), akai.to_string());
+        metadata.insert("iq_change".to_string(), iq.to_string());
+        metadata.insert("datapoint_id".to_string(), input.datapoint_id.clone());
+
+        push_notification_to_user_do(
+            env,
+            user_id,
+            NotificationType::Performance,
+            &message,
+            Some(metadata),
+        )
+        .await?;
+    }
+
+    Ok(())
+}
+

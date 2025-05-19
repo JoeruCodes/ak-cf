@@ -41,7 +41,7 @@ pub enum Op {
     Register(String),
     AwardBadge(BadgesKind),
     UpdateEmail(String),
-    UpdatePfp(Option<String>),
+    UpdatePfp(usize),
     UpdateLastLogin(u64),
     UpdateIq(usize),
     UpdateSocialScore(usize),
@@ -62,6 +62,7 @@ pub enum Op {
     GenerateDailyTasks,
     CheckDailyTask(Option<String>),
     SyncData,
+    RequestVoiceKey 
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -111,7 +112,7 @@ pub struct LeaderboardData {
 pub struct UserProfile {
     pub user_id: String,
     pub email: Option<String>,
-    pub pfp: Option<String>,
+    pub pfp: usize,
     pub user_name: Option<String>,
     pub password: Option<String>,
     pub last_login: u64,
@@ -170,7 +171,7 @@ impl Default for UserData {
             profile: UserProfile {
                 user_id: "kunal".to_string(),
                 email: None,
-                pfp: None,
+                pfp: 1,
                 user_name: Some("guest".to_string()),
                 password: Some("123456".to_string()),
                 last_login: Date::now().as_millis() / 1000,

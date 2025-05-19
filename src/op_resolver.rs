@@ -1,8 +1,9 @@
 use crate::daily_task::Links;
-use crate::daily_task::*;
+use crate::gpt_voice::*;
 use crate::notification::{push_notification_to_user_do, NotificationType};
 use crate::types::DurableObjectAugmentedMsg;
 use crate::utils::find_user_id_by_referral_code;
+use crate::{daily_task::*, gpt_voice};
 use rand::Rng;
 use serde_json::json;
 use sha2::digest::Update;
@@ -501,6 +502,13 @@ impl UserData {
                 Err(e) => {
                     console_error!("Error syncing data: {:?}", e);
                     Response::error("Failed to sync data", 500)
+                }
+            },
+            Op::RequestVoiceKey => match gpt_voice::fetch_gpt_voice_key(env).await {
+                Ok(secret) => Response::ok(secret),
+                Err(e) => {
+                    console_log!("Error fetching GPT Voice token: {:?}", e);
+                    Response::error("Failed to fetch voice token", 500)
                 }
             },
         }

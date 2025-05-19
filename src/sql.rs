@@ -16,7 +16,7 @@ pub async fn create_table_if_not_exists(d1: &D1Database) -> Result<Response> {
     CREATE TABLE IF NOT EXISTS user_profile (
         user_id TEXT PRIMARY KEY,
         email TEXT,
-        pfp TEXT,
+        pfp INTEGER,
         user_name TEXT,
         password TEXT,
         last_login INTEGER NOT NULL
@@ -121,9 +121,7 @@ pub async fn insert_new_user(data: &UserData, d1: &D1Database) -> Result<()> {
                 .unwrap_or_else(JsValue::null),
             data.profile
                 .pfp
-                .clone()
-                .map(JsValue::from)
-                .unwrap_or_else(JsValue::null),
+                .into(),
             (data.profile.last_login as f64).into(),
         ])?
         .run()
@@ -254,9 +252,7 @@ pub async fn update_user_data(data: &UserData, d1: &D1Database) -> Result<()> {
                 .unwrap_or_else(JsValue::null),
             data.profile
                 .pfp
-                .clone()
-                .map(JsValue::from)
-                .unwrap_or_else(JsValue::null),
+                .into(),
             (data.profile.last_login as f64).into(),
             user_id.into(), // WHERE clause
         ])?

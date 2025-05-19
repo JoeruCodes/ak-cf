@@ -15,6 +15,7 @@ mod registry;
 mod sql;
 mod types;
 mod utils;
+mod gpt_voice;
 
 #[durable_object]
 struct UserDataWrapper {
@@ -109,6 +110,21 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
 
         return forward_op_to_do(&env, &DurableObjectAugmentedMsg { user_id, op }).await;
     }
+   else if path == "/api/notify_task_result" {
+    if req.method() != Method::Post {
+        return Response::error("Method Not Allowed", 405);
+    }
+
+    let input: notification::TaskResultInput = match req.json().await {
+        Ok(data) => data,
+        Err(_) => return Response::error("Invalid JSON", 400),
+    };
+
+    return match notification::notify_task_result(input, &env).await {
+        Ok(_) => Response::ok("Notifications sent"),
+        Err(e) => Response::error(format!("Failed: {}", e), 500),
+    };
+}
     console_log!("Not a leaderboard or register");
 
     if let Some(upgrade_header) = req.headers().get("Upgrade")? {

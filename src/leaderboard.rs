@@ -5,8 +5,16 @@ use worker::{D1Database, Env, Request, Response, Result};
 #[derive(Serialize)]
 pub struct LeaderboardEntry {
     pub user_id: String,
+    pub user_name: String,
+     pub pfp : usize,
     pub product: usize,
+    pub social_score: usize,
+    pub iq: usize,
+    pub king_lvl: usize,
+    pub league: String,
+   
 }
+
 
 #[derive(Deserialize)]
 struct RangeQuery {
@@ -45,18 +53,36 @@ async fn get_players_in_range(
     p_max: usize,
 ) -> Result<Vec<LeaderboardEntry>> {
     let stmt = d1.prepare(
-        "SELECT user_profile.user_id, product
-         FROM user_profile
-         JOIN progress ON user_profile.user_id = progress.user_id
-         WHERE product BETWEEN ? AND ?
-         ORDER BY product DESC
-         LIMIT 100",
+        r#"
+        SELECT 
+            user_profile.user_id, 
+            user_profile.user_name, 
+            user_profile.pfp,
+            progress.product, 
+            progress.social_score, 
+            progress.iq, 
+            game_state.king_lvl, 
+            user_data.league
+        FROM user_profile
+        JOIN progress ON user_profile.user_id = progress.user_id
+        JOIN game_state ON user_profile.user_id = game_state.user_id
+        JOIN user_data ON user_profile.user_id = user_data.user_id
+        WHERE progress.product BETWEEN ? AND ?
+        ORDER BY progress.product DESC
+        LIMIT 100
+        "#,
     );
 
     #[derive(serde::Deserialize)]
     struct Row {
         user_id: String,
+        user_name: String,
+        pfp : usize,
         product: usize,
+        social_score: usize,
+        iq: usize,
+        king_lvl: usize,
+        league: String,
     }
 
     let rows: Vec<Row> = stmt
@@ -69,12 +95,19 @@ async fn get_players_in_range(
         .into_iter()
         .map(|row| LeaderboardEntry {
             user_id: row.user_id,
+            user_name: row.user_name,
+            pfp : row.pfp,
             product: row.product,
+            social_score: row.social_score,
+            iq: row.iq,
+            king_lvl: row.king_lvl,
+            league: row.league,
         })
         .collect();
 
     Ok(entries)
 }
+
 
 // Get user rank even if outside top 100
 async fn get_user_rank(

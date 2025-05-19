@@ -24,3 +24,6 @@ enabled = true
 binding = "D1_DATABASE"
 database_name = "d1_database"
 database_id = "d1_database"
+
+[vars]
+GPT_CLIENT_SECRET = "your-secret-here"
