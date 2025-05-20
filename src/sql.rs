@@ -356,6 +356,7 @@ pub async fn update_user_data(data: &UserData, d1: &D1Database) -> Result<()> {
 pub struct UserCredentials {
     pub user_id: String,
     pub password: String,
+    pub user_name: Option<String>,
 }
 
 pub async fn get_user_credentials(
@@ -363,8 +364,8 @@ pub async fn get_user_credentials(
     user_id: &str,
 ) -> Result<Option<UserCredentials>> {
     let stmt = d1
-        .prepare("SELECT user_id, password FROM user_profile WHERE user_id = ?")
-        .bind(&[JsValue::from(user_id)])?;
+        .prepare("SELECT user_id, password, user_name FROM user_profile WHERE user_id = ? OR user_name = ?")
+        .bind(&[JsValue::from(user_id), JsValue::from(user_id)])?;
 
     let result: Option<UserCredentials> = stmt.first(None).await?;
 
