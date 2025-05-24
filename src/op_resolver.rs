@@ -157,13 +157,10 @@ impl UserData {
             Op::Register(password) => {
                 console_log!("Creating tables if not exists");
                 let sha256 = sha2::Sha256::new();
-                let password = sha256
-                    .chain(password.as_bytes())
-                    .finalize();
+                let password = sha256.chain(password.as_bytes()).finalize();
                 let password = hex::encode(password);
 
                 self.profile.password = Some(password.clone());
-
 
                 match insert_new_user(&self, &d1).await {
                     Ok(_) => Response::ok("User registered successfully!"),
@@ -193,15 +190,15 @@ impl UserData {
                     .to_string(),
                 )
             }
-            Op::UpdateLastLogin(time) => {
-                self.profile.last_login = *time;
-                Response::ok(
-                    json!({
-                        "last_login": self.profile.last_login
-                    })
-                    .to_string(),
-                )
-            }
+            // Op::UpdateLastLogin(time) => {
+            //     self.profile.last_login = *time;
+            //     Response::ok(
+            //         json!({
+            //             "last_login": self.profile.last_login
+            //         })
+            //         .to_string(),
+            //     )
+            // }
 
             // Progress operations
             Op::UpdateIq(iq) => {
@@ -249,15 +246,15 @@ impl UserData {
                     None => Response::error("Active aliens full!", 404),
                 }
             }
-            Op::UpdateAllTaskDone(done) => {
-                self.progress.all_task_done = *done;
-                Response::ok(
-                    json!({
-                        "all_task_done": self.progress.all_task_done
-                    })
-                    .to_string(),
-                )
-            }
+            // Op::UpdateAllTaskDone(done) => {
+            //     self.progress.all_task_done = *done;
+            //     Response::ok(
+            //         json!({
+            //             "all_task_done": self.progress.all_task_done
+            //         })
+            //         .to_string(),
+            //     )
+            // }
             Op::IncrementAkaiBalance => {
                 self.progress.akai_balance += 1;
                 Response::ok(
@@ -278,26 +275,26 @@ impl UserData {
                     .to_string(),
                 )
             }
-            Op::IncrementTotalTaskCompleted => {
-                self.progress.total_task_completed += 1;
-                Response::ok(
-                    json!({
-                        "total_task_completed": self.progress.total_task_completed
-                    })
-                    .to_string(),
-                )
-            }
+            // Op::IncrementTotalTaskCompleted => {
+            //     self.progress.total_task_completed += 1;
+            //     Response::ok(
+            //         json!({
+            //             "total_task_completed": self.progress.total_task_completed
+            //         })
+            //         .to_string(),
+            //     )
+            // }
 
             // Social operations
-            Op::IncrementPlayersReferred => {
-                self.social.players_referred += 1;
-                Response::ok(
-                    json!({
-                        "players_referred": self.social.players_referred
-                    })
-                    .to_string(),
-                )
-            }
+            // Op::IncrementPlayersReferred => {
+            //     self.social.players_referred += 1;
+            //     Response::ok(
+            //         json!({
+            //             "players_referred": self.social.players_referred
+            //         })
+            //         .to_string(),
+            //     )
+            // }
 
             // League operations
             Op::UpdateLeague(league) => {
@@ -309,15 +306,15 @@ impl UserData {
                     .to_string(),
                 )
             }
-            Op::DeleteAlienFromInventory(idx) => {
-                self.game_state.inventory_aliens.remove(*idx);
-                Response::ok(
-                    json!({
-                        "inventory_aliens": self.game_state.inventory_aliens
-                    })
-                    .to_string(),
-                )
-            }
+            // Op::DeleteAlienFromInventory(idx) => {
+            //     self.game_state.inventory_aliens.remove(*idx);
+            //     Response::ok(
+            //         json!({
+            //             "inventory_aliens": self.game_state.inventory_aliens
+            //         })
+            //         .to_string(),
+            //     )
+            // }
             Op::DeleteAlienFromActive(idx) => {
                 self.game_state.active_aliens[*idx] = 0;
                 calculate_king_alien_lvl(self);
@@ -366,6 +363,22 @@ impl UserData {
             Op::AddNotificationInternal(notification) => {
                 if notification.notification_type == NotificationType::Referral {
                     self.social.players_referred += 1;
+                    self.progress.social_score += 10;
+                    self.progress.akai_balance += 25;
+                } else if notification.notification_type == NotificationType::Performance {
+                    if let Some(metadata) = &notification.metadata {
+                        if let Some(akai_str) = metadata.get("akai_earned") {
+                            if let Ok(akai) = akai_str.parse::<usize>() {
+                                self.progress.akai_balance += akai;
+                            }
+                        }
+
+                        if let Some(iq_str) = metadata.get("iq_change") {
+                            if let Ok(iq) = iq_str.parse::<usize>() {
+                                self.progress.iq += iq;
+                            }
+                        }
+                    }
                 }
 
                 self.notifications.push(notification.clone());
@@ -436,18 +449,18 @@ impl UserData {
                     }
                 }
             }
-            Op::UpdateDbFromDo => match crate::sql::update_user_data(self, d1).await {
-                Ok(_) => Response::ok(
-                    json!({
-                        "status": "Database successfully updated from DO"
-                    })
-                    .to_string(),
-                ),
-                Err(e) => {
-                    console_error!("Error updating DB from DO: {:?}", e);
-                    Response::error("Failed to update DB", 500)
-                }
-            },
+            // Op::UpdateDbFromDo => match crate::sql::update_user_data(self, d1).await {
+            //     Ok(_) => Response::ok(
+            //         json!({
+            //             "status": "Database successfully updated from DO"
+            //         })
+            //         .to_string(),
+            //     ),
+            //     Err(e) => {
+            //         console_error!("Error updating DB from DO: {:?}", e);
+            //         Response::error("Failed to update DB", 500)
+            //     }
+            // },
             Op::GenerateDailyTasks => {
                 let now = worker::Date::now().as_millis() as u64 / 1000;
                 let q_seconds = 5; // 1 day interval
