@@ -8,6 +8,7 @@ use wasm_bindgen::JsValue;
 use worker::*;
 
 mod daily_task;
+mod gpt_voice;
 mod leaderboard;
 mod notification;
 mod op_resolver;
@@ -15,7 +16,6 @@ mod registry;
 mod sql;
 mod types;
 mod utils;
-mod gpt_voice;
 
 #[durable_object]
 struct UserDataWrapper {
@@ -109,29 +109,28 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
         let op = Op::Register(password);
 
         return forward_op_to_do(&env, &DurableObjectAugmentedMsg { user_id, op }).await;
-    }
-   else if path == "/api/notify_task_result" {
-    if req.method() != Method::Post {
-        return Response::error("Method Not Allowed", 405);
-    }
+    } else if path == "/api/notify_task_result" {
+        if req.method() != Method::Post {
+            return Response::error("Method Not Allowed", 405);
+        }
 
-    let input: notification::TaskResultInput = match req.json().await {
-        Ok(data) => data,
-        Err(_) => return Response::error("Invalid JSON", 400),
-    };
+        let input: notification::TaskResultInput = match req.json().await {
+            Ok(data) => data,
+            Err(_) => return Response::error("Invalid JSON", 400),
+        };
 
-    return match notification::notify_task_result(input, &env).await {
-        Ok(_) => Response::ok("Notifications sent"),
-        Err(e) => Response::error(format!("Failed: {}", e), 500),
-    };
-}
+        return match notification::notify_task_result(input, &env).await {
+            Ok(_) => Response::ok("Notifications sent"),
+            Err(e) => Response::error(format!("Failed: {}", e), 500),
+        };
+    }
     console_log!("Not a leaderboard or register");
 
     if let Some(upgrade_header) = req.headers().get("Upgrade")? {
-        let Some(username_header) = req.headers().get("user_id")? else {
+        let Some(username_header) = req.headers().get("username")? else {
             // If username header is missing, we can immediately return Unauthorized.
-            console_log!("Unauthorized: Missing user_id");
-            return Response::error("Unauthorized: Missing user_id", 401);
+            console_log!("Unauthorized: Missing username");
+            return Response::error("Unauthorized: Missing username", 401);
         };
         let Some(password_header) = req.headers().get("password")? else {
             console_log!("Unauthorized: Missing password");
@@ -148,15 +147,12 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
         let db = env.d1("D1_DATABASE")?;
         console_log!("Database");
         match sql::get_user_credentials(&db, &username_header).await {
-            Ok(Some(UserCredentials { user_id, password, user_name })) => {
-                console_log!("User credentials: {:?}", user_name);
+            Ok(Some(UserCredentials { user_id,user_name, password })) => {
                 let sha256 = sha2::Sha256::new();
 
-                let password_header = sha256
-                    .chain(password_header.as_bytes())
-                    .finalize();
+                let password_header = sha256.chain(password_header.as_bytes()).finalize();
 
-                if (user_name.unwrap_or(user_id) == username_header) && password == hex::encode(password_header) {
+                if user_id == username_header && password == hex::encode(password_header) {
                     // Credentials match, proceed with WebSocket upgrade
                 } else {
                     // Password doesn't match
@@ -289,7 +285,11 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
                         }
 
                         Err(e) => {
-                            console_error!("WebSocket event stream error for user {}: {}", user_id, e);
+                            console_error!(
+                                "WebSocket event stream error for user {}: {}",
+                                user_id,
+                                e
+                            );
                             match forward_op_to_do(
                                 &env_clone,
                                 &DurableObjectAugmentedMsg {

@@ -104,26 +104,33 @@ impl UserData {
                     PowerUpKind::ColumnPowerUp => {
                         let col = *target_pos % 4;
                         for row in 0..4 {
-                            self.game_state.active_aliens[row * 4 + col] += 1;
+                            let index = row * 4 + col;
+                            if self.game_state.active_aliens[index] > 0 {
+                                self.game_state.active_aliens[index] += 1;
+                            }
                         }
                     }
                     PowerUpKind::RowPowerUp => {
                         let row = *target_pos / 4;
                         for col in 0..4 {
-                            self.game_state.active_aliens[row * 4 + col] += 1;
+                            let index = row * 4 + col;
+                            if self.game_state.active_aliens[index] > 0 {
+                                self.game_state.active_aliens[index] += 1;
+                            }
                         }
                     }
                     PowerUpKind::NearestSquarePowerUp => {
                         let x = *target_pos % 4;
                         let y = *target_pos / 4;
 
-                        // Nearest 2x2 square from (x, y)
                         let candidates = [(x, y), (x + 1, y), (x, y + 1), (x + 1, y + 1)];
 
                         for (nx, ny) in candidates {
                             if nx < 4 && ny < 4 {
                                 let index = ny * 4 + nx;
-                                self.game_state.active_aliens[index] += 1;
+                                if self.game_state.active_aliens[index] > 0 {
+                                    self.game_state.active_aliens[index] += 1;
+                                }
                             }
                         }
                     }
@@ -463,7 +470,7 @@ impl UserData {
             // },
             Op::GenerateDailyTasks => {
                 let now = worker::Date::now().as_millis() as u64 / 1000;
-                let q_seconds = 5; // 1 day interval
+                let q_seconds = 30; // 1 day interval
 
                 let last_login = self.profile.last_login;
 

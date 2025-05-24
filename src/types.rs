@@ -102,6 +102,21 @@ pub enum LeagueType {
     Challenger,
 }
 
+impl LeagueType {
+    pub fn from_product(product: usize) -> Self {
+        match product / 50 {
+            0 => LeagueType::Bronze,
+            1 => LeagueType::Silver,
+            2 => LeagueType::Gold,
+            3 => LeagueType::Platinum,
+            4 => LeagueType::Diamond,
+            5 => LeagueType::Master,
+            6 => LeagueType::GrandMaster,
+            _ => LeagueType::Challenger,
+        }
+    }
+}
+
 #[derive(Deserialize, Clone, Debug, Serialize)]
 pub struct LeaderboardData {
     pub league: usize,
