@@ -97,10 +97,13 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
 
     console_log!("Path: {:?}", path);
     if path == "/api/leaderboard" {
+        console_log!("Matched leaderboard route");
         if req.method() != Method::Get {
             return Response::error("Method Not Allowed", 405);
         }
-        return leaderboard::handle_leaderboard(req, &env).await;
+        let result = leaderboard::handle_leaderboard(req, &env).await;
+        console_log!("Leaderboard handler result: {:?}", result);
+        return result;
     } else if path == "/api/register" {
         if req.method() != Method::Post {
             return Response::error("Method Not Allowed", 405);
@@ -147,7 +150,11 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
         let db = env.d1("D1_DATABASE")?;
         console_log!("Database");
         match sql::get_user_credentials(&db, &username_header).await {
-            Ok(Some(UserCredentials { user_id,user_name, password })) => {
+            Ok(Some(UserCredentials {
+                user_id,
+                user_name,
+                password,
+            })) => {
                 let sha256 = sha2::Sha256::new();
 
                 let password_header = sha256.chain(password_header.as_bytes()).finalize();

@@ -186,7 +186,7 @@ impl Default for UserData {
             profile: UserProfile {
                 user_id: "kunal".to_string(),
                 email: None,
-                pfp: 0,
+                pfp: 1,
                 user_name: None,
                 password: Some("123456".to_string()),
                 last_login: Date::now().as_millis() / 1000,

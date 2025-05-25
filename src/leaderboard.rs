@@ -1,18 +1,20 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use worker::{D1Database, Env, Request, Response, Result};
+use worker::{console_log}; // Make sure you import this
+use worker::console_error;
 
-#[derive(Serialize)]
+
+#[derive(Serialize,Deserialize)]
 pub struct LeaderboardEntry {
     pub user_id: String,
-    pub user_name: String,
-     pub pfp : usize,
+    pub user_name: Option<String>,
+    pub pfp : usize,
     pub product: usize,
     pub social_score: usize,
     pub iq: usize,
     pub king_lvl: usize,
     pub league: String,
-   
 }
 
 
@@ -46,6 +48,7 @@ pub async fn handle_leaderboard(mut req: Request, env: &Env) -> Result<Response>
     }))
 }
 
+
 // Fetch top 100 players in range
 async fn get_players_in_range(
     d1: &D1Database,
@@ -76,7 +79,7 @@ async fn get_players_in_range(
     #[derive(serde::Deserialize)]
     struct Row {
         user_id: String,
-        user_name: String,
+        user_name: Option<String>,
         pfp : usize,
         product: usize,
         social_score: usize,
@@ -85,11 +88,17 @@ async fn get_players_in_range(
         league: String,
     }
 
+    console_log!("{}",100);
+
     let rows: Vec<Row> = stmt
         .bind(&[p_min.into(), p_max.into()])?
         .all()
         .await?
         .results::<Row>()?;
+
+
+        console_log!("{}",100);
+
 
     let entries = rows
         .into_iter()
@@ -105,8 +114,12 @@ async fn get_players_in_range(
         })
         .collect();
 
+            console_log!("{}",100);
+
+
     Ok(entries)
 }
+
 
 
 // Get user rank even if outside top 100
@@ -117,11 +130,11 @@ async fn get_user_rank(
     user_id: &str,
 ) -> Result<usize> {
     let stmt = d1.prepare(
-        "SELECT COUNT(*) + 1 as rank
-         FROM progress
-         WHERE product BETWEEN ? AND ?
-         AND product > (SELECT product FROM progress WHERE user_id = ?)",
-    );
+    "SELECT COUNT(*) + 1 as rank
+     FROM progress
+     WHERE product BETWEEN ? AND ?
+     AND product > COALESCE((SELECT product FROM progress WHERE user_id = ?), -1)"
+);
 
     #[derive(serde::Deserialize)]
     struct RankRow {
