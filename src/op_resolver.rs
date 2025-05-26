@@ -9,6 +9,7 @@ use serde_json::json;
 use sha2::digest::Update;
 use sha2::Digest;
 use worker::{console_error, console_log, D1Database, Env, Response, Result};
+use std::collections::HashMap;
 
 use crate::{
     sql::insert_new_user,
@@ -39,7 +40,11 @@ impl UserData {
                         0
                     };
                 self.game_state.total_merged_aliens += 1;
+                //daily task check
                 self.daily.daily_merge.0 += 1;
+                if(self.daily.daily_merge.0 == self.daily.daily_merge.1){
+                    self.daily.daily_merge.2 = true;
+                }
                 calculate_king_alien_lvl(self);
                 Response::ok(
                     json!({
@@ -138,6 +143,9 @@ impl UserData {
 
                 calculate_king_alien_lvl(self);
                 self.daily.daily_powerups.0 += 1;
+                if(self.daily.daily_powerups.0 == self.daily.daily_powerups.1){
+                    self.daily.daily_powerups.2 = true;
+                }
 
                 Response::ok(
                     json!({
@@ -150,7 +158,6 @@ impl UserData {
                     .to_string(),
                 )
             }
-
             Op::AwardBadge(badge) => {
                 self.progress.badges.push(badge.clone());
                 Response::ok(
@@ -197,15 +204,6 @@ impl UserData {
                     .to_string(),
                 )
             }
-            // Op::UpdateLastLogin(time) => {
-            //     self.profile.last_login = *time;
-            //     Response::ok(
-            //         json!({
-            //             "last_login": self.profile.last_login
-            //         })
-            //         .to_string(),
-            //     )
-            // }
 
             // Progress operations
             Op::UpdateIq(iq) => {
@@ -253,15 +251,6 @@ impl UserData {
                     None => Response::error("Active aliens full!", 404),
                 }
             }
-            // Op::UpdateAllTaskDone(done) => {
-            //     self.progress.all_task_done = *done;
-            //     Response::ok(
-            //         json!({
-            //             "all_task_done": self.progress.all_task_done
-            //         })
-            //         .to_string(),
-            //     )
-            // }
             Op::IncrementAkaiBalance => {
                 self.progress.akai_balance += 1;
                 Response::ok(
@@ -282,26 +271,7 @@ impl UserData {
                     .to_string(),
                 )
             }
-            // Op::IncrementTotalTaskCompleted => {
-            //     self.progress.total_task_completed += 1;
-            //     Response::ok(
-            //         json!({
-            //             "total_task_completed": self.progress.total_task_completed
-            //         })
-            //         .to_string(),
-            //     )
-            // }
-
-            // Social operations
-            // Op::IncrementPlayersReferred => {
-            //     self.social.players_referred += 1;
-            //     Response::ok(
-            //         json!({
-            //             "players_referred": self.social.players_referred
-            //         })
-            //         .to_string(),
-            //     )
-            // }
+            
 
             // League operations
             Op::UpdateLeague(league) => {
@@ -313,15 +283,7 @@ impl UserData {
                     .to_string(),
                 )
             }
-            // Op::DeleteAlienFromInventory(idx) => {
-            //     self.game_state.inventory_aliens.remove(*idx);
-            //     Response::ok(
-            //         json!({
-            //             "inventory_aliens": self.game_state.inventory_aliens
-            //         })
-            //         .to_string(),
-            //     )
-            // }
+            
             Op::DeleteAlienFromActive(idx) => {
                 self.game_state.active_aliens[*idx] = 0;
                 calculate_king_alien_lvl(self);
@@ -423,18 +385,20 @@ impl UserData {
                 }
             }
             Op::UseReferralCode(code) => {
-                // Fetch env separately in the DO and pass it into this method
-                let env = env.clone(); // Make sure you pass it into resolve_op beforehand
+                
+                let env = env.clone(); 
 
                 match find_user_id_by_referral_code(&d1, code).await {
                     Ok(Some(referrer_user_id)) => {
                         let message = "Your referral code was used!";
+                        let mut metadata = HashMap::new();
+                        metadata.insert("used_by".to_string(), op_request.user_id.clone());
                         if let Err(e) = push_notification_to_user_do(
-                            &env, // ✅ pass the env from the outside
+                            &env, 
                             &referrer_user_id,
                             NotificationType::Referral,
                             message,
-                            None,
+                        Some(metadata),
                         )
                         .await
                         {
@@ -456,18 +420,18 @@ impl UserData {
                     }
                 }
             }
-            // Op::UpdateDbFromDo => match crate::sql::update_user_data(self, d1).await {
-            //     Ok(_) => Response::ok(
-            //         json!({
-            //             "status": "Database successfully updated from DO"
-            //         })
-            //         .to_string(),
-            //     ),
-            //     Err(e) => {
-            //         console_error!("Error updating DB from DO: {:?}", e);
-            //         Response::error("Failed to update DB", 500)
-            //     }
-            // },
+            Op::UpdateDbFromDo => match crate::sql::update_user_data(self, d1).await {
+                Ok(_) => Response::ok(
+                    json!({
+                        "status": "Database successfully updated from DO"
+                    })
+                    .to_string(),
+                ),
+                Err(e) => {
+                    console_error!("Error updating DB from DO: {:?}", e);
+                    Response::error("Failed to update DB", 500)
+                }
+            },
             Op::GenerateDailyTasks => {
                 let now = worker::Date::now().as_millis() as u64 / 1000;
                 let q_seconds = 30; // 1 day interval

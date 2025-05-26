@@ -58,7 +58,7 @@ pub enum Op {
     AddNotificationInternal(Notification),
     MarkNotificationRead(String), // Takes notification_id as input
     UseReferralCode(String),
-    // UpdateDbFromDo,
+    UpdateDbFromDo,
     GenerateDailyTasks,
     CheckDailyTask(Option<String>),
     SyncData,
@@ -160,6 +160,9 @@ pub struct DailyProgress {
     pub daily_merge: (usize, usize, bool),
     pub daily_annotate: (usize, usize, bool),
     pub daily_powerups: (usize, usize, bool),
+    pub total_completed :  usize,
+    pub alien_earned : Option<usize>,
+    pub pu_earned : Option<PowerUpKind>,
 }
 
 #[derive(Deserialize, Clone, Debug, Serialize)]
@@ -223,6 +226,9 @@ impl Default for UserData {
                 daily_merge: (0, 0, false),
                 daily_annotate: (0, 0, false),
                 daily_powerups: (0, 0, false),
+                total_completed:0,
+                alien_earned:None,
+                pu_earned:None,
             },
         };
 
