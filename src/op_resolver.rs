@@ -2,14 +2,14 @@ use crate::daily_task::Links;
 use crate::gpt_voice::*;
 use crate::notification::{push_notification_to_user_do, NotificationType};
 use crate::types::DurableObjectAugmentedMsg;
-use crate::utils::find_user_id_by_referral_code;
+use crate::utils::{find_user_id_by_referral_code, give_daily_reward};
 use crate::{daily_task::*, gpt_voice};
 use rand::Rng;
 use serde_json::json;
 use sha2::digest::Update;
 use sha2::Digest;
-use worker::{console_error, console_log, D1Database, Env, Response, Result};
 use std::collections::HashMap;
+use worker::{console_error, console_log, D1Database, Env, Response, Result};
 
 use crate::{
     sql::insert_new_user,
@@ -42,8 +42,11 @@ impl UserData {
                 self.game_state.total_merged_aliens += 1;
                 //daily task check
                 self.daily.daily_merge.0 += 1;
-                if(self.daily.daily_merge.0 == self.daily.daily_merge.1){
+                if (self.daily.daily_merge.0 == self.daily.daily_merge.1) {
                     self.daily.daily_merge.2 = true;
+                    self.daily.total_completed += 1;
+                    self.progress.social_score += 2;
+                    give_daily_reward(self);
                 }
                 calculate_king_alien_lvl(self);
                 Response::ok(
@@ -53,7 +56,7 @@ impl UserData {
                         "total_merged_aliens": self.game_state.total_merged_aliens,
                         "king_lvl": self.game_state.king_lvl,
                         "product" : self.progress.product,
-                        "daily_merge" : self.daily.daily_merge
+                        "daily" : self.daily
                     })
                     .to_string(),
                 )
@@ -143,8 +146,11 @@ impl UserData {
 
                 calculate_king_alien_lvl(self);
                 self.daily.daily_powerups.0 += 1;
-                if(self.daily.daily_powerups.0 == self.daily.daily_powerups.1){
+                if (self.daily.daily_powerups.0 == self.daily.daily_powerups.1) {
                     self.daily.daily_powerups.2 = true;
+                    self.daily.total_completed += 1;
+                    self.progress.social_score += 2;
+                    give_daily_reward(self);
                 }
 
                 Response::ok(
@@ -153,7 +159,7 @@ impl UserData {
                         "power_ups": self.game_state.power_ups,
                         "king_lvl": self.game_state.king_lvl,
                         "product" : self.progress.product,
-                        "daily_powerups" : self.daily.daily_powerups,
+                        "daily" : self.daily
                     })
                     .to_string(),
                 )
@@ -271,7 +277,6 @@ impl UserData {
                     .to_string(),
                 )
             }
-            
 
             // League operations
             Op::UpdateLeague(league) => {
@@ -283,7 +288,7 @@ impl UserData {
                     .to_string(),
                 )
             }
-            
+
             Op::DeleteAlienFromActive(idx) => {
                 self.game_state.active_aliens[*idx] = 0;
                 calculate_king_alien_lvl(self);
@@ -385,8 +390,7 @@ impl UserData {
                 }
             }
             Op::UseReferralCode(code) => {
-                
-                let env = env.clone(); 
+                let env = env.clone();
 
                 match find_user_id_by_referral_code(&d1, code).await {
                     Ok(Some(referrer_user_id)) => {
@@ -394,11 +398,11 @@ impl UserData {
                         let mut metadata = HashMap::new();
                         metadata.insert("used_by".to_string(), op_request.user_id.clone());
                         if let Err(e) = push_notification_to_user_do(
-                            &env, 
+                            &env,
                             &referrer_user_id,
                             NotificationType::Referral,
                             message,
-                        Some(metadata),
+                            Some(metadata),
                         )
                         .await
                         {
@@ -434,12 +438,16 @@ impl UserData {
             },
             Op::GenerateDailyTasks => {
                 let now = worker::Date::now().as_millis() as u64 / 1000;
-                let q_seconds = 30; // 1 day interval
+                let q_seconds = 1000; // 1 day interval
 
                 let last_login = self.profile.last_login;
 
                 if now - last_login < q_seconds && !self.daily.links.is_empty() {
                     return Response::from_json(&self.daily);
+                }
+
+                if self.daily.total_completed < 3 && self.daily.links.len()>0{
+                    self.progress.social_score -= 5;
                 }
 
                 let mut rng = rand::thread_rng();
@@ -453,32 +461,34 @@ impl UserData {
                     .collect();
 
                 self.daily.links = random_links;
-                self.daily.daily_merge = (0, rng.gen_range(15..=26), false);
+                self.daily.daily_merge = (0, rng.gen_range(5..=15), false);
                 self.daily.daily_annotate = (0, rng.gen_range(3..=7), false);
                 self.daily.daily_powerups = (0, rng.gen_range(2..=6), false);
                 self.profile.last_login = now;
+                self.daily.alien_earned=None;
+                self.daily.pu_earned=None;
+                self.daily.total_completed =0;
 
                 Response::from_json(&self.daily)
             }
             Op::CheckDailyTask(maybe_url) => {
-                // Check if a link was passed and mark it as visited if matched
+                let mut matched = false;
+
                 if let Some(url) = maybe_url {
                     for link in &mut self.daily.links {
-                        if link.url == *url {
+                        if link.url == *url && !link.visited {
                             link.visited = true;
+                            self.progress.social_score += 2;
+                            matched = true;
+                            break; // Exit loop once matched and updated
                         }
                     }
+
+                    if matched {
+                        self.daily.total_completed += 1;
+                        give_daily_reward(self);
+                    }
                 }
-
-                let check_and_mark = |(current, target, _): (usize, usize, bool)| {
-                    let is_complete = current >= target;
-                    (current, target, is_complete)
-                };
-
-                self.daily.daily_merge = check_and_mark(self.daily.daily_merge);
-                self.daily.daily_annotate = check_and_mark(self.daily.daily_annotate);
-                self.daily.daily_powerups = check_and_mark(self.daily.daily_powerups);
-
                 Response::from_json(&self.daily)
             }
             Op::SyncData => match crate::sql::update_user_data(self, d1).await {

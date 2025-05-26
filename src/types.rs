@@ -198,7 +198,7 @@ impl Default for UserData {
                 active_aliens: [0; 16],
                 inventory_aliens: Vec::new(),
                 power_ups: Vec::new(),
-                king_lvl: 0,
+                king_lvl: 1,
                 total_merged_aliens: 0,
             },
             progress: Progress {
