@@ -28,7 +28,6 @@ pub enum Op {
     UpdateIq(usize),
     IncrementAkaiBalance,
     DecrementAkaiBalance,
-    UpdateLeague(LeagueType),
     MoveAlienFromInventoryToActive,
     UpdateUserName(Option<String>),
     UpdatePassword(Option<String>),
@@ -114,7 +113,7 @@ pub struct UserProfile {
 #[derive(Deserialize, Clone, Debug, Serialize)]
 pub struct GameState {
     pub active_aliens: [usize; 16],
-    pub inventory_aliens: Vec<usize>,
+    pub inventory_aliens: usize,
     pub power_ups: Vec<PowerUpKind>,
     pub king_lvl: usize,
     pub total_merged_aliens: usize,
@@ -174,7 +173,7 @@ impl Default for UserData {
             },
             game_state: GameState {
                 active_aliens: [0; 16],
-                inventory_aliens: Vec::new(),
+                inventory_aliens: 0,
                 power_ups: Vec::new(),
                 king_lvl: 1,
                 total_merged_aliens: 0,

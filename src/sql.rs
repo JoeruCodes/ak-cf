@@ -26,7 +26,7 @@ pub async fn create_table_if_not_exists(d1: &D1Database) -> Result<Response> {
     CREATE TABLE IF NOT EXISTS game_state (
         game_state_id INTEGER PRIMARY KEY AUTOINCREMENT,
         active_aliens TEXT NOT NULL, -- JSON string representing array
-        inventory_aliens TEXT NOT NULL, -- JSON string representing array
+        inventory_aliens INTEGER NOT NULL, -- JSON string representing array
         power_ups TEXT NOT NULL, -- JSON string representing array of enums
         king_lvl INTEGER NOT NULL,
         total_merged_aliens INTEGER NOT NULL,
@@ -133,14 +133,14 @@ pub async fn insert_new_user(data: &UserData, d1: &D1Database) -> Result<()> {
     );
     let active_aliens_json =
         serde_json::to_string(&data.game_state.active_aliens).unwrap_or_else(|_| "[]".to_string());
-    let inventory_aliens_json = serde_json::to_string(&data.game_state.inventory_aliens)
-        .unwrap_or_else(|_| "[]".to_string());
+    // let inventory_aliens_json = serde_json::to_string(&data.game_state.inventory_aliens)
+    //     .unwrap_or_else(|_| "[]".to_string());
     let power_ups_json = convert_power_ups_to_json(&data.game_state.power_ups);
     stmt_game
         .bind(&[
             user_id.into(),
             active_aliens_json.into(),
-            inventory_aliens_json.into(),
+            data.game_state.inventory_aliens.into(),
             power_ups_json.into(),
             data.game_state.king_lvl.into(),
             data.game_state.total_merged_aliens.into(),
@@ -265,13 +265,13 @@ pub async fn update_user_data(data: &UserData, d1: &D1Database) -> Result<()> {
     );
     let active_aliens_json =
         serde_json::to_string(&data.game_state.active_aliens).unwrap_or_else(|_| "[]".to_string());
-    let inventory_aliens_json = serde_json::to_string(&data.game_state.inventory_aliens)
-        .unwrap_or_else(|_| "[]".to_string());
+    // let inventory_aliens_json = serde_json::to_string(&data.game_state.inventory_aliens)
+    //     .unwrap_or_else(|_| "[]".to_string());
     let power_ups_json = convert_power_ups_to_json(&data.game_state.power_ups);
     stmt_game
         .bind(&[
             active_aliens_json.into(),
-            inventory_aliens_json.into(),
+            data.game_state.inventory_aliens.into(),
             power_ups_json.into(),
             data.game_state.king_lvl.into(),
             data.game_state.total_merged_aliens.into(),

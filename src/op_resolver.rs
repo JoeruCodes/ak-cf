@@ -33,12 +33,13 @@ impl UserData {
                     return Response::error("Combined Alien IDs cannot be the same", 400);
                 }
                 self.game_state.active_aliens[*idx_a] += 1;
-                self.game_state.active_aliens[*idx_b] =
-                    if !self.game_state.inventory_aliens.is_empty() {
-                        self.game_state.inventory_aliens.pop().unwrap()
-                    } else {
-                        0
-                    };
+                // Replace the second alien with (king_lvl-1)*10 + 1 if we have inventory
+                self.game_state.active_aliens[*idx_b] = if self.game_state.inventory_aliens > 0 {
+                    self.game_state.inventory_aliens -= 1;
+                    (self.game_state.king_lvl - 1) * 10 + 1
+                } else {
+                    0
+                };
                 self.game_state.total_merged_aliens += 1;
                 //daily task check
                 self.daily.daily_merge.0 += 1;
@@ -68,36 +69,50 @@ impl UserData {
                 )
             }
             Op::SpawnAlien => {
-                let alien_lvl = self
-                    .game_state
-                    .active_aliens
-                    .iter()
-                    .max()
-                    .unwrap_or(&5)
-                    .max(&5)
-                    - 4;
-                if self.game_state.active_aliens.iter().all(|a| *a != 0) {
-                    self.game_state.inventory_aliens.push(alien_lvl);
-                } else {
-                    for i in 0..self.game_state.active_aliens.len() {
-                        if self.game_state.active_aliens[i] == 0 {
-                            self.game_state.active_aliens[i] = alien_lvl;
-                            break;
-                        }
-                    }
-                    calculate_king_alien_lvl(self);
-                }
+                // Always add to inventory
+                self.game_state.inventory_aliens += 1;
+
                 Response::ok(
                     json!({
                         "active_aliens": self.game_state.active_aliens,
                         "inventory_aliens": self.game_state.inventory_aliens,
                         "total_merged_aliens": self.game_state.total_merged_aliens,
                         "king_lvl": self.game_state.king_lvl,
-                        "product" : self.progress.product
+                        "product": self.progress.product
                     })
                     .to_string(),
                 )
             }
+            Op::MoveAlienFromInventoryToActive => {
+                if self.game_state.inventory_aliens == 0 {
+                    return Response::error("No aliens in inventory", 404);
+                }
+
+                if let Some(empty_slot) = self.game_state.active_aliens.iter().position(|a| *a == 0)
+                {
+                    // Decrease inventory count
+                    self.game_state.inventory_aliens -= 1;
+
+                    // Place (king_lvl-1)*10 + 1 in the empty slot
+                    self.game_state.active_aliens[empty_slot] =
+                        (self.game_state.king_lvl - 1) * 10 + 1;
+
+                    calculate_king_alien_lvl(self);    
+
+                    Response::ok(
+                        json!({
+                            "active_aliens": self.game_state.active_aliens,
+                            "inventory_aliens": self.game_state.inventory_aliens,
+                            "king_lvl": self.game_state.king_lvl,
+                            "product": self.progress.product,
+                        })
+                        .to_string(),
+                    )
+                } else {
+                    Response::error("Active aliens grid is full!", 404)
+                }
+            }
+
             Op::SpawnPowerup(powerup) => {
                 self.game_state.power_ups.push(*powerup);
                 Response::ok(
@@ -235,29 +250,7 @@ impl UserData {
                     .to_string(),
                 )
             }
-            Op::MoveAlienFromInventoryToActive => {
-                match self.game_state.active_aliens.iter().position(|a| *a == 0) {
-                    Some(alien) => {
-                        let inven = self.game_state.inventory_aliens.pop();
-
-                        match inven {
-                            Some(inven) => {
-                                self.game_state.active_aliens[alien] = inven;
-
-                                Response::ok(
-                                    json!({
-                                        "active_aliens": self.game_state.active_aliens,
-                                        "inventory_aliens": self.game_state.inventory_aliens
-                                    })
-                                    .to_string(),
-                                )
-                            }
-                            None => Response::error("No aliens in inventory", 404),
-                        }
-                    }
-                    None => Response::error("Active aliens full!", 404),
-                }
-            }
+           
             Op::IncrementAkaiBalance => {
                 self.progress.akai_balance += 1;
                 Response::ok(
@@ -274,17 +267,6 @@ impl UserData {
                 Response::ok(
                     json!({
                         "akai_balance": self.progress.akai_balance
-                    })
-                    .to_string(),
-                )
-            }
-
-            // League operations
-            Op::UpdateLeague(league) => {
-                self.league = league.clone();
-                Response::ok(
-                    json!({
-                        "league": self.league
                     })
                     .to_string(),
                 )
