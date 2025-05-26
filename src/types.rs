@@ -235,6 +235,11 @@ impl UserData {
         let time_since_last_login = current_time - self.profile.last_login;
         let one_day = 60 * 60 * 24;
         let two_days = one_day * 2;
+        let one_hour = 20;
+
+        if time_since_last_login >= one_hour{
+            self.game_state.inventory_aliens += 10;
+        }
 
         if time_since_last_login > one_day && time_since_last_login < two_days {
             self.progress.streak += 1;

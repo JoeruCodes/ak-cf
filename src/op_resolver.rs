@@ -9,7 +9,7 @@ use serde_json::json;
 use sha2::digest::Update;
 use sha2::Digest;
 use std::collections::HashMap;
-use worker::{console_error, console_log, D1Database, Env, Response, Result};
+use worker::{console_error, console_log, D1Database, Env, Response, Result,Date};
 
 use crate::{
     sql::insert_new_user,
@@ -200,7 +200,9 @@ impl UserData {
                     .to_string(),
                 )
             }
-            Op::GetData => Response::from_json(&self),
+            Op::GetData => {
+                self.profile.last_login = Date::now().as_millis() / 1000;
+                Response::from_json(&self)}
             Op::Register(password) => {
                 console_log!("Creating tables if not exists");
                 let sha256 = sha2::Sha256::new();
