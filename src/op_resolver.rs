@@ -55,8 +55,14 @@ impl UserData {
                         "inventory_aliens": self.game_state.inventory_aliens,
                         "total_merged_aliens": self.game_state.total_merged_aliens,
                         "king_lvl": self.game_state.king_lvl,
-                        "product" : self.progress.product,
-                        "daily" : self.daily
+                        "product": self.progress.product,
+                        "links": self.daily.links,
+                        "daily_merge": self.daily.daily_merge,
+                        "daily_annotate": self.daily.daily_annotate,
+                        "daily_powerups": self.daily.daily_powerups,
+                        "total_completed": self.daily.total_completed,
+                        "alien_earned": self.daily.alien_earned,
+                        "pu_earned": self.daily.pu_earned
                     })
                     .to_string(),
                 )
@@ -159,7 +165,13 @@ impl UserData {
                         "power_ups": self.game_state.power_ups,
                         "king_lvl": self.game_state.king_lvl,
                         "product" : self.progress.product,
-                        "daily" : self.daily
+                        "links": self.daily.links,
+                        "daily_merge": self.daily.daily_merge,
+                        "daily_annotate": self.daily.daily_annotate,
+                        "daily_powerups": self.daily.daily_powerups,
+                        "total_completed": self.daily.total_completed,
+                        "alien_earned": self.daily.alien_earned,
+                        "pu_earned": self.daily.pu_earned
                     })
                     .to_string(),
                 )
@@ -218,17 +230,6 @@ impl UserData {
                 Response::ok(
                     json!({
                         "iq": self.progress.iq,
-                        "product" : self.progress.product
-                    })
-                    .to_string(),
-                )
-            }
-            Op::UpdateSocialScore(score) => {
-                self.progress.social_score = *score;
-                calculate_product(self);
-                Response::ok(
-                    json!({
-                        "social_score": self.progress.social_score,
                         "product" : self.progress.product
                     })
                     .to_string(),
@@ -446,7 +447,7 @@ impl UserData {
                     return Response::from_json(&self.daily);
                 }
 
-                if self.daily.total_completed < 3 && self.daily.links.len()>0{
+                if self.daily.total_completed < 3 && self.daily.links.len() > 0 {
                     self.progress.social_score -= 5;
                 }
 
@@ -465,9 +466,9 @@ impl UserData {
                 self.daily.daily_annotate = (0, rng.gen_range(3..=7), false);
                 self.daily.daily_powerups = (0, rng.gen_range(2..=6), false);
                 self.profile.last_login = now;
-                self.daily.alien_earned=None;
-                self.daily.pu_earned=None;
-                self.daily.total_completed =0;
+                self.daily.alien_earned = None;
+                self.daily.pu_earned = None;
+                self.daily.total_completed = 0;
 
                 Response::from_json(&self.daily)
             }

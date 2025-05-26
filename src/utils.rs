@@ -86,6 +86,45 @@ pub fn calculate_king_alien_lvl(user_data: &mut UserData) {
     // Only update if new level is higher than current level
     if new_lvl > user_data.game_state.king_lvl {
         user_data.game_state.king_lvl = new_lvl;
+        
+        // Add 50 to akai
+        user_data.progress.akai_balance += 50;
+        
+        // Add 5 aliens (lvl - 3)
+        for _ in 0..5 {
+            let earned_alien = new_lvl * 10 - 3;
+            
+            let mut first_empty_index: Option<usize> = None;
+            let mut min_value = usize::MAX;
+            let mut min_index: usize = 0;
+
+            for (i, &val) in user_data.game_state.active_aliens.iter().enumerate() {
+                if val == 0 && first_empty_index.is_none() {
+                    first_empty_index = Some(i);
+                    break;
+                }
+
+                if val < min_value {
+                    min_value = val;
+                    min_index = i;
+                }
+            }
+
+            let target_index = first_empty_index.unwrap_or(min_index);
+            user_data.game_state.active_aliens[target_index] = earned_alien;
+        }
+        
+        // Add a random power up
+        let powerups = [
+            PowerUpKind::RowPowerUp,
+            PowerUpKind::ColumnPowerUp,
+            PowerUpKind::NearestSquarePowerUp,
+        ];
+
+        let mut rng = thread_rng();
+        let random_pu = *powerups.choose(&mut rng).unwrap();
+        user_data.game_state.power_ups.push(random_pu);
+
         calculate_product(user_data); // 🧠 Update product only if level increased
     }
 }

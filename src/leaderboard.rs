@@ -47,78 +47,6 @@ pub async fn handle_leaderboard(mut req: Request, env: &Env) -> Result<Response>
 }
 
 
-// Fetch top 100 players in range
-// async fn get_players_in_range(
-//     d1: &D1Database,
-//     p_min: usize,
-//     p_max: usize,
-// ) -> Result<Vec<LeaderboardEntry>> {
-//     let stmt = d1.prepare(
-//         r#"
-//         SELECT 
-//             user_profile.user_id, 
-//             user_profile.user_name, 
-//             user_profile.pfp,
-//             progress.product, 
-//             progress.social_score, 
-//             progress.iq, 
-//             game_state.king_lvl, 
-//             user_data.league
-//         FROM user_profile
-//         JOIN progress ON user_profile.user_id = progress.user_id
-//         JOIN game_state ON user_profile.user_id = game_state.user_id
-//         JOIN user_data ON user_profile.user_id = user_data.user_id
-//         WHERE progress.product BETWEEN ? AND ?
-//         ORDER BY progress.product DESC
-//         LIMIT 100
-//         "#,
-//     );
-
-//     #[derive(serde::Deserialize)]
-//     struct Row {
-//         user_id: String,
-//         user_name: Option<String>,
-//         pfp : usize,
-//         product: usize,
-//         social_score: usize,
-//         iq: usize,
-//         king_lvl: usize,
-//         league: String,
-//     }
-
-//     console_log!("{}",100);
-
-//     let rows: Vec<Row> = stmt
-//         .bind(&[p_min.into(), p_max.into()])?
-//         .all()
-//         .await?
-//         .results::<Row>()?;
-
-
-//         console_log!("{}",100);
-
-
-//     let entries = rows
-//         .into_iter()
-//         .map(|row| LeaderboardEntry {
-//             user_id: row.user_id,
-//             user_name: row.user_name,
-//             pfp : row.pfp,
-//             product: row.product,
-//             social_score: row.social_score,
-//             iq: row.iq,
-//             king_lvl: row.king_lvl,
-//             league: row.league,
-//         })
-//         .collect();
-
-//             console_log!("{}",100);
-
-
-//     Ok(entries)
-// }
-
-
 async fn get_players_in_range(
     d1: &D1Database,
     p_min: usize,
@@ -152,35 +80,6 @@ async fn get_players_in_range(
 
     Ok(entries)
 }
-
-
-// Get user rank even if outside top 100
-// async fn get_user_rank(
-//     d1: &D1Database,
-//     p_min: usize,
-//     p_max: usize,
-//     user_id: &str,
-// ) -> Result<usize> {
-//     let stmt = d1.prepare(
-//     "SELECT COUNT(*) + 1 as rank
-//      FROM progress
-//      WHERE product BETWEEN ? AND ?
-//      AND product > COALESCE((SELECT product FROM progress WHERE user_id = ?), -1)"
-// );
-
-//     #[derive(serde::Deserialize)]
-//     struct RankRow {
-//         rank: usize,
-//     }
-
-//     let row: RankRow = stmt
-//         .bind(&[p_min.into(), p_max.into(), user_id.into()])?
-//         .first::<RankRow>(None)
-//         .await?
-//         .ok_or_else(|| worker::Error::RustError("User not found".to_string()))?;
-
-//     Ok(row.rank)
-// }
 
 
 async fn get_user_rank(

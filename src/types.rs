@@ -13,27 +13,10 @@ use crate::{
     notification::NotificationType,
 };
 
-// #[derive(Serialize, Deserialize, Debug, Clone)]
-// pub struct Notification {
-//     pub id: String,          // unique id for each notification
-//     pub kind: NotificationType, // type of notification
-//     pub message: String,     // text message
-//     pub timestamp: u64,      // unix time (in seconds)
-//     pub read: bool,          // whether the notification was read
-// }
-
-// #[derive(Serialize, Deserialize, Debug, Clone)]
-// pub enum NotificationType {
-//     Referral,
-//     ConsensusResult,
-//     GameUpdate,
-// }
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Op {
     CombineAlien(usize, usize),
     SpawnAlien,
-    // DeleteAlienFromInventory(usize),
     DeleteAlienFromActive(usize),
     UsePowerup(usize, usize), //changed
     SpawnPowerup(PowerUpKind),
@@ -42,21 +25,16 @@ pub enum Op {
     AwardBadge(BadgesKind),
     UpdateEmail(String),
     UpdatePfp(usize),
-    // UpdateLastLogin(u64),
     UpdateIq(usize),
-    UpdateSocialScore(usize),
     IncrementAkaiBalance,
     DecrementAkaiBalance,
-    // IncrementTotalTaskCompleted,
-    // IncrementPlayersReferred,
     UpdateLeague(LeagueType),
-    // UpdateAllTaskDone(bool),
     MoveAlienFromInventoryToActive,
     UpdateUserName(Option<String>),
     UpdatePassword(Option<String>),
     MoveAlienInGrid(usize, usize),
     AddNotificationInternal(Notification),
-    MarkNotificationRead(String), // Takes notification_id as input
+    MarkNotificationRead(String),
     UseReferralCode(String),
     UpdateDbFromDo,
     GenerateDailyTasks,
