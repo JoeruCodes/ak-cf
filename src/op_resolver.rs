@@ -2,14 +2,15 @@ use crate::daily_task::Links;
 use crate::gpt_voice::*;
 use crate::notification::{push_notification_to_user_do, NotificationType};
 use crate::types::DurableObjectAugmentedMsg;
-use crate::utils::{find_user_id_by_referral_code, give_daily_reward};
+use crate::utils::{fetch_video_tasks, find_user_id_by_referral_code, give_daily_reward};
 use crate::{daily_task::*, gpt_voice};
 use rand::Rng;
 use serde_json::json;
 use sha2::digest::Update;
 use sha2::Digest;
 use std::collections::HashMap;
-use worker::{console_error, console_log, D1Database, Env, Response, Result,Date};
+use worker::*;
+use worker::{console_error, console_log, D1Database, Date, Env, Response, Result};
 
 use crate::{
     sql::insert_new_user,
@@ -96,7 +97,7 @@ impl UserData {
                     self.game_state.active_aliens[empty_slot] =
                         (self.game_state.king_lvl - 1) * 10 + 1;
 
-                    calculate_king_alien_lvl(self);    
+                    calculate_king_alien_lvl(self);
 
                     Response::ok(
                         json!({
@@ -200,7 +201,8 @@ impl UserData {
             }
             Op::GetData => {
                 self.profile.last_login = Date::now().as_millis() / 1000;
-                Response::from_json(&self)}
+                Response::from_json(&self)
+            }
             Op::Register(password) => {
                 console_log!("Creating tables if not exists");
                 let sha256 = sha2::Sha256::new();
@@ -250,7 +252,7 @@ impl UserData {
                     .to_string(),
                 )
             }
-           
+
             Op::IncrementAkaiBalance => {
                 self.progress.akai_balance += 1;
                 Response::ok(
@@ -443,7 +445,14 @@ impl UserData {
                     })
                     .collect();
 
+                let number_of_videos_to_request = ((self.progress.iq) / 50 + 1) * 5;
+
+                let video_tasks = fetch_video_tasks(number_of_videos_to_request, &env)
+                    .await
+                    .unwrap_or_default();
+
                 self.daily.links = random_links;
+                self.daily.video_tasks = video_tasks;
                 self.daily.daily_merge = (0, rng.gen_range(5..=15), false);
                 self.daily.daily_annotate = (0, rng.gen_range(3..=7), false);
                 self.daily.daily_powerups = (0, rng.gen_range(2..=6), false);
@@ -454,6 +463,7 @@ impl UserData {
 
                 Response::from_json(&self.daily)
             }
+
             Op::CheckDailyTask(maybe_url) => {
                 let mut matched = false;
 
@@ -473,9 +483,9 @@ impl UserData {
                 }
                 Response::from_json(&self.daily)
             }
-            Op::ClaimDailyReward(index)=>{
-               give_daily_reward(self,*index);
-               Response::from_json(&self.daily)
+            Op::ClaimDailyReward(index) => {
+                give_daily_reward(self, *index);
+                Response::from_json(&self.daily)
             }
             Op::SyncData => match crate::sql::update_user_data(self, d1).await {
                 Ok(_) => Response::ok("Data synced successfully"),
@@ -491,6 +501,41 @@ impl UserData {
                     Response::error("Failed to fetch voice token", 500)
                 }
             },
+            Op::SubmitVideoLabel(datapoint_id, label) => {
+                let payload = serde_json::json!({
+                    "datapointId": datapoint_id,
+                    "label": label
+                })
+                .to_string();
+
+                let req = Request::new_with_init(
+                    "http://localhost:3001/api/game/label-datapoint",
+                    &RequestInit {
+                        method: Method::Post,
+                        body: Some(payload.into()),
+                        headers: {
+                            let mut headers = Headers::new();
+                            headers.set("Content-Type", "application/json")?;
+                            headers
+                        },
+                        ..Default::default()
+                    },
+                )?;
+
+                let res = Fetch::Request(req).send().await?;
+let status = res.status_code();
+
+if status >= 200 && status < 300 {
+    Response::from_json(&serde_json::json!({
+        "message": "Label submitted successfully"
+    }))
+} else {
+    Response::from_json(&serde_json::json!({
+        "error": "Failed to submit label",
+        "status": status
+    }))
+}
+            }
         }
     }
 }

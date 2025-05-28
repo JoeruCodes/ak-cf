@@ -2,10 +2,11 @@ use rand::seq::SliceRandom;
 use rand::thread_rng;
 use serde_json::Value;
 use worker::D1Database;
+use worker::*;
 
 use crate::{
     sql,
-    types::{BadgesKind, GameState, LeagueType, PowerUpKind, UserData},
+    types::{BadgesKind, GameState, LeagueType, PowerUpKind, PreLabel, UserData, VideoTask},
 };
 
 // Helper function to convert power_ups to JSON for SQLite
@@ -86,14 +87,14 @@ pub fn calculate_king_alien_lvl(user_data: &mut UserData) {
     // Only update if new level is higher than current level
     if new_lvl > user_data.game_state.king_lvl {
         user_data.game_state.king_lvl = new_lvl;
-        
+
         // Add 50 to akai
         user_data.progress.akai_balance += 50;
-        
+
         // Add 5 aliens (lvl - 3)
         for _ in 0..5 {
             let earned_alien = new_lvl * 10 - 3;
-            
+
             let mut first_empty_index: Option<usize> = None;
             let mut min_value = usize::MAX;
             let mut min_index: usize = 0;
@@ -113,7 +114,7 @@ pub fn calculate_king_alien_lvl(user_data: &mut UserData) {
             let target_index = first_empty_index.unwrap_or(min_index);
             user_data.game_state.active_aliens[target_index] = earned_alien;
         }
-        
+
         // Add a random power up
         let powerups = [
             PowerUpKind::RowPowerUp,
@@ -129,8 +130,9 @@ pub fn calculate_king_alien_lvl(user_data: &mut UserData) {
     }
 }
 
-pub fn give_daily_reward(user_data: &mut UserData,index : usize) {
-    if user_data.daily.total_completed >= 3 && user_data.daily.alien_earned.is_none() && index==3 {
+pub fn give_daily_reward(user_data: &mut UserData, index: usize) {
+    if user_data.daily.total_completed >= 3 && user_data.daily.alien_earned.is_none() && index == 3
+    {
         let earned_alien = user_data.game_state.king_lvl * 10 - 3;
         user_data.daily.alien_earned = Some(earned_alien);
 
@@ -154,7 +156,7 @@ pub fn give_daily_reward(user_data: &mut UserData,index : usize) {
         user_data.game_state.active_aliens[target_index] = earned_alien;
     }
 
-    if user_data.daily.total_completed >= 5 && user_data.daily.pu_earned.is_none() && index==5{
+    if user_data.daily.total_completed >= 5 && user_data.daily.pu_earned.is_none() && index == 5 {
         let powerups = [
             PowerUpKind::RowPowerUp,
             PowerUpKind::ColumnPowerUp,
@@ -169,6 +171,58 @@ pub fn give_daily_reward(user_data: &mut UserData,index : usize) {
     }
 }
 
+pub async fn fetch_video_tasks(n: usize, env: &Env) -> Result<Vec<VideoTask>> {
+    let url = "https://your-backend/api/get-videos"; // <-- Replace this
+    let payload = serde_json::json!({ "numberOfDatapoints": n }).to_string();
+
+    let req = Request::new_with_init(
+        url,
+        &RequestInit {
+            method: Method::Post,
+            body: Some(payload.into()),
+            headers: {
+                let mut headers = Headers::new();
+                headers.set("Content-Type", "application/json")?;
+                headers
+            },
+            ..Default::default()
+        },
+    )?;
+
+    let mut response = Fetch::Request(req).send().await?;
+    let data: serde_json::Value = response.json().await?;
+
+    let tasks = data
+        .as_array()
+        .unwrap_or(&vec![])
+        .iter()
+        .map(|item| VideoTask {
+            id: item["_id"].as_str().unwrap_or_default().to_string(),
+            task_id: item["task_id"].as_str().unwrap_or_default().to_string(),
+            media_url: item["mediaUrl"].as_str().unwrap_or_default().to_string(),
+            pre_label: PreLabel {
+                map_position: item["preLabel"]["map_position"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
+                summary: item["preLabel"]["summary"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
+                keywords: item["preLabel"]["keywords"]
+                    .as_array()
+                    .unwrap_or(&vec![])
+                    .iter()
+                    .filter_map(|kw| kw.as_str().map(String::from))
+                    .collect(),
+            },
+            visited: false,
+        })
+        .collect();
+
+    Ok(tasks)
+}
+
 #[derive(serde::Deserialize)]
 struct UserIdRow {
     user_id: String,
@@ -177,7 +231,7 @@ struct UserIdRow {
 pub async fn find_user_id_by_referral_code(
     d1: &D1Database,
     code: &str,
-) -> Result<Option<String>, worker::Error> {
+) -> Result<Option<String>> {
     let stmt = d1.prepare("SELECT user_id FROM social_data WHERE referal_code = ?");
     let res = stmt.bind(&[code.into()])?.first::<UserIdRow>(None).await;
 

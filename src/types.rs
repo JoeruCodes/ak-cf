@@ -40,7 +40,8 @@ pub enum Op {
     CheckDailyTask(Option<String>),
     ClaimDailyReward(usize),
     SyncData,
-    RequestVoiceKey 
+    RequestVoiceKey,
+    SubmitVideoLabel(String, String), // (datapoint_id, label)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -132,15 +133,32 @@ pub struct Progress {
     pub badges: Vec<BadgesKind>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct VideoTask {
+    pub id: String,
+    pub task_id: String,
+    pub media_url: String,
+    pub pre_label: PreLabel,
+    pub visited: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct PreLabel {
+    pub map_position: String,
+    pub summary: String,
+    pub keywords: Vec<String>,
+}
+
 #[derive(Deserialize, Clone, Debug, Serialize)]
 pub struct DailyProgress {
     pub links: Vec<Links>,
     pub daily_merge: (usize, usize, bool),
     pub daily_annotate: (usize, usize, bool),
     pub daily_powerups: (usize, usize, bool),
-    pub total_completed :  usize,
-    pub alien_earned : Option<usize>,
-    pub pu_earned : Option<PowerUpKind>,
+    pub total_completed: usize,
+    pub alien_earned: Option<usize>,
+    pub pu_earned: Option<PowerUpKind>,
+    pub video_tasks: Vec<VideoTask>, // <-- NEW
 }
 
 #[derive(Deserialize, Clone, Debug, Serialize)]
@@ -201,12 +219,13 @@ impl Default for UserData {
             notifications: Vec::new(), // <-- added this,
             daily: DailyProgress {
                 links: Vec::new(),
+                video_tasks: Vec::new(), // <-- added here
                 daily_merge: (0, 0, false),
                 daily_annotate: (0, 0, false),
                 daily_powerups: (0, 0, false),
-                total_completed:0,
-                alien_earned:None,
-                pu_earned:None,
+                total_completed: 0,
+                alien_earned: None,
+                pu_earned: None,
             },
         };
 
@@ -238,7 +257,7 @@ impl UserData {
         let two_days = one_day * 2;
         let one_hour = 20;
 
-        if time_since_last_login >= one_hour{
+        if time_since_last_login >= one_hour {
             self.game_state.inventory_aliens += 10;
         }
 
