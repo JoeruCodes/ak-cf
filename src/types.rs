@@ -38,6 +38,7 @@ pub enum Op {
     UpdateDbFromDo,
     GenerateDailyTasks,
     CheckDailyTask(Option<String>),
+    ClaimDailyReward(usize),
     SyncData,
     RequestVoiceKey 
 }

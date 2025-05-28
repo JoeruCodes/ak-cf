@@ -47,7 +47,6 @@ impl UserData {
                     self.daily.daily_merge.2 = true;
                     self.daily.total_completed += 1;
                     self.progress.social_score += 2;
-                    give_daily_reward(self);
                 }
                 calculate_king_alien_lvl(self);
                 Response::ok(
@@ -171,7 +170,6 @@ impl UserData {
                     self.daily.daily_powerups.2 = true;
                     self.daily.total_completed += 1;
                     self.progress.social_score += 2;
-                    give_daily_reward(self);
                 }
 
                 Response::ok(
@@ -471,10 +469,13 @@ impl UserData {
 
                     if matched {
                         self.daily.total_completed += 1;
-                        give_daily_reward(self);
                     }
                 }
                 Response::from_json(&self.daily)
+            }
+            Op::ClaimDailyReward(index)=>{
+               give_daily_reward(self,*index);
+               Response::from_json(&self.daily)
             }
             Op::SyncData => match crate::sql::update_user_data(self, d1).await {
                 Ok(_) => Response::ok("Data synced successfully"),

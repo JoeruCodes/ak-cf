@@ -129,8 +129,8 @@ pub fn calculate_king_alien_lvl(user_data: &mut UserData) {
     }
 }
 
-pub fn give_daily_reward(user_data: &mut UserData) {
-    if user_data.daily.total_completed == 3 && user_data.daily.alien_earned.is_none() {
+pub fn give_daily_reward(user_data: &mut UserData,index : usize) {
+    if user_data.daily.total_completed >= 3 && user_data.daily.alien_earned.is_none() && index==3 {
         let earned_alien = user_data.game_state.king_lvl * 10 - 3;
         user_data.daily.alien_earned = Some(earned_alien);
 
@@ -154,7 +154,7 @@ pub fn give_daily_reward(user_data: &mut UserData) {
         user_data.game_state.active_aliens[target_index] = earned_alien;
     }
 
-    if user_data.daily.total_completed == 5 && user_data.daily.pu_earned.is_none(){
+    if user_data.daily.total_completed >= 5 && user_data.daily.pu_earned.is_none() && index==5{
         let powerups = [
             PowerUpKind::RowPowerUp,
             PowerUpKind::ColumnPowerUp,
