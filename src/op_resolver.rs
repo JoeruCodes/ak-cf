@@ -422,18 +422,19 @@ impl UserData {
                 }
             },
             Op::GenerateDailyTasks => {
+                console_log!("100");
                 let now = worker::Date::now().as_millis() as u64 / 1000;
                 let q_seconds = 1000; // 1 day interval
 
                 let last_login = self.profile.last_login;
 
-                if now - last_login < q_seconds && !self.daily.links.is_empty() {
-                    return Response::from_json(&self.daily);
-                }
+                // if now - last_login < q_seconds && !self.daily.links.is_empty() {
+                //     return Response::from_json(&self.daily);
+                // }
 
-                if self.daily.total_completed < 3 && self.daily.links.len() > 0 {
-                    self.progress.social_score -= 5;
-                }
+                // if self.daily.total_completed < 3 && self.daily.links.len() > 0 {
+                //     self.progress.social_score -= 5;
+                // }
 
                 let mut rng = rand::thread_rng();
                 let random_links = get_random_links(2)
@@ -450,6 +451,8 @@ impl UserData {
                 let video_tasks = fetch_video_tasks(number_of_videos_to_request, &env)
                     .await
                     .unwrap_or_default();
+
+                console_log!("{}",video_tasks.len());
 
                 self.daily.links = random_links;
                 self.daily.video_tasks = video_tasks;
@@ -523,18 +526,18 @@ impl UserData {
                 )?;
 
                 let res = Fetch::Request(req).send().await?;
-let status = res.status_code();
+                let status = res.status_code();
 
-if status >= 200 && status < 300 {
-    Response::from_json(&serde_json::json!({
-        "message": "Label submitted successfully"
-    }))
-} else {
-    Response::from_json(&serde_json::json!({
-        "error": "Failed to submit label",
-        "status": status
-    }))
-}
+                if status >= 200 && status < 300 {
+                    Response::from_json(&serde_json::json!({
+                        "message": "Label submitted successfully"
+                    }))
+                } else {
+                    Response::from_json(&serde_json::json!({
+                        "error": "Failed to submit label",
+                        "status": status
+                    }))
+                }
             }
         }
     }

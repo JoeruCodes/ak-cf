@@ -172,6 +172,8 @@ pub fn give_daily_reward(user_data: &mut UserData, index: usize) {
 }
 
 pub async fn fetch_video_tasks(n: usize, env: &Env) -> Result<Vec<VideoTask>> {
+                    println!("{}",100);
+
     let url = "https://your-backend/api/get-videos"; // <-- Replace this
     let payload = serde_json::json!({ "numberOfDatapoints": n }).to_string();
 
@@ -190,8 +192,9 @@ pub async fn fetch_video_tasks(n: usize, env: &Env) -> Result<Vec<VideoTask>> {
     )?;
 
     let mut response = Fetch::Request(req).send().await?;
+    console_log!("{:?}",response);
     let data: serde_json::Value = response.json().await?;
-
+    console_log!("{:?}",data);
     let tasks = data
         .as_array()
         .unwrap_or(&vec![])
@@ -219,6 +222,9 @@ pub async fn fetch_video_tasks(n: usize, env: &Env) -> Result<Vec<VideoTask>> {
             visited: false,
         })
         .collect();
+
+
+    console_log!("{:?}",tasks);
 
     Ok(tasks)
 }
