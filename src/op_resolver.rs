@@ -300,7 +300,7 @@ impl UserData {
 
                 Response::ok(
                     json!({
-                        "user_name": self.profile.password
+                        "password": self.profile.password
                     })
                     .to_string(),
                 )
