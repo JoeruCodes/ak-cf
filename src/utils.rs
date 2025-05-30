@@ -154,6 +154,7 @@ pub fn give_daily_reward(user_data: &mut UserData, index: usize) {
 
         let target_index = first_empty_index.unwrap_or(min_index);
         user_data.game_state.active_aliens[target_index] = earned_alien;
+        calculate_king_alien_lvl(user_data);
     }
 
     if user_data.daily.total_completed >= 5 && user_data.daily.pu_earned.is_none() && index == 5 {

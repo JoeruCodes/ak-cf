@@ -456,7 +456,7 @@ impl UserData {
 
                 self.daily.links = random_links;
                 self.daily.video_tasks = video_tasks;
-                self.daily.daily_merge = (0, rng.gen_range(5..=15), false);
+                self.daily.daily_merge = (0, rng.gen_range(2..=4), false);
                 self.daily.daily_annotate = (0, rng.gen_range(3..=7), false);
                 self.daily.daily_powerups = (0, rng.gen_range(2..=6), false);
                 self.profile.last_login = now;
@@ -488,8 +488,18 @@ impl UserData {
             }
             Op::ClaimDailyReward(index) => {
                 give_daily_reward(self, *index);
-                Response::from_json(&self.daily)
-            }
+                Response::ok(
+                    json!({
+                        "active_aliens": self.game_state.active_aliens,
+                        "king_lvl": self.game_state.king_lvl,
+                        "product": self.progress.product,
+                        "alien_earned": self.daily.alien_earned,
+                        "pu_earned": self.daily.pu_earned,
+                        "power_ups": self.game_state.power_ups
+                    })
+                    .to_string(),
+                )
+            } 
             Op::SyncData => match crate::sql::update_user_data(self, d1).await {
                 Ok(_) => Response::ok("Data synced successfully"),
                 Err(e) => {
