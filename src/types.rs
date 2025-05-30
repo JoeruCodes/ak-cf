@@ -30,7 +30,7 @@ pub enum Op {
     DecrementAkaiBalance,
     MoveAlienFromInventoryToActive,
     UpdateUserName(Option<String>),
-    UpdatePassword(Option<String>),
+    UpdatePassword(String),
     MoveAlienInGrid(usize, usize),
     AddNotificationInternal(Notification),
     MarkNotificationRead(String),

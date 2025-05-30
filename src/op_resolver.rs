@@ -296,7 +296,11 @@ impl UserData {
                 )
             }
             Op::UpdatePassword(password) => {
-                self.profile.password = password.clone();
+                let sha256 = sha2::Sha256::new();
+                let password = sha256.chain(password.as_bytes()).finalize();
+                let password = hex::encode(password);
+
+                self.profile.password = Some(password.clone());
 
                 Response::ok(
                     json!({
