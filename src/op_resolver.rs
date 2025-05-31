@@ -456,7 +456,7 @@ impl UserData {
                     .await
                     .unwrap_or_default();
 
-                console_log!("{}",video_tasks.len());
+                console_log!("{}", video_tasks.len());
 
                 self.daily.links = random_links;
                 self.daily.video_tasks = video_tasks;
@@ -503,19 +503,12 @@ impl UserData {
                     })
                     .to_string(),
                 )
-            } 
+            }
             Op::SyncData => match crate::sql::update_user_data(self, d1).await {
                 Ok(_) => Response::ok("Data synced successfully"),
                 Err(e) => {
                     console_error!("Error syncing data: {:?}", e);
                     Response::error("Failed to sync data", 500)
-                }
-            },
-            Op::RequestVoiceKey => match gpt_voice::fetch_gpt_voice_key(env).await {
-                Ok(secret) => Response::ok(secret),
-                Err(e) => {
-                    console_log!("Error fetching GPT Voice token: {:?}", e);
-                    Response::error("Failed to fetch voice token", 500)
                 }
             },
             Op::SubmitVideoLabel(datapoint_id, label) => {

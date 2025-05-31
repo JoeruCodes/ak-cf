@@ -126,14 +126,13 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
             Ok(_) => Response::ok("Notifications sent"),
             Err(e) => Response::error(format!("Failed: {}", e), 500),
         };
+    } else if path == "/api/transcribe" {
+        console_log!("Matched transcribe route");
+        if req.method() != Method::Post {
+            return Response::error("Method Not Allowed", 405);
+        }
+        return gpt_voice::handle_transcription(req, env).await;
     }
-    // else if path == "/api/transcribe" { // New endpoint
-    //     console_log!("Matched transcribe route");
-    //     if req.method() != Method::Post {
-    //         return Response::error("Method Not Allowed", 405);
-    //     }
-    //     return handle_transcription(req, env).await; // Call the new handler
-    // }
 
     console_log!("Not a leaderboard or register");
 

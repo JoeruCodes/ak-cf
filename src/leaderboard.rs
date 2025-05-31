@@ -2,19 +2,17 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use worker::{D1Database, Env, Request, Response, Result};
 
-
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct LeaderboardEntry {
     pub user_id: String,
     pub user_name: Option<String>,
-    pub pfp : usize,
+    pub pfp: usize,
     pub product: usize,
     pub social_score: usize,
     pub iq: usize,
     pub king_lvl: usize,
     pub league: String,
 }
-
 
 #[derive(Deserialize)]
 struct RangeQuery {
@@ -46,15 +44,15 @@ pub async fn handle_leaderboard(mut req: Request, env: &Env) -> Result<Response>
     }))
 }
 
-
 async fn get_players_in_range(
     d1: &D1Database,
     p_min: usize,
     p_max: usize,
 ) -> Result<Vec<LeaderboardEntry>> {
     // Use COALESCE to handle potential NULL values
-    let entries = d1.prepare(
-        r#"
+    let entries = d1
+        .prepare(
+            r#"
         SELECT 
             user_profile.user_id as "user_id",
             COALESCE(user_profile.user_name, '') as "user_name",
@@ -72,15 +70,14 @@ async fn get_players_in_range(
         ORDER BY progress.product DESC
         LIMIT 100
         "#,
-    )
-    .bind(&[p_min.into(), p_max.into()])?
-    .all()
-    .await?
-    .results::<LeaderboardEntry>()?; // Direct deserialization
+        )
+        .bind(&[p_min.into(), p_max.into()])?
+        .all()
+        .await?
+        .results::<LeaderboardEntry>()?; // Direct deserialization
 
     Ok(entries)
 }
-
 
 async fn get_user_rank(
     d1: &D1Database,
@@ -89,8 +86,9 @@ async fn get_user_rank(
     user_id: &str,
 ) -> Result<usize> {
     // Directly query and extract the rank as a primitive value
-    let rank: usize = d1.prepare(
-        r#"
+    let rank: usize = d1
+        .prepare(
+            r#"
         SELECT COUNT(DISTINCT product) + 1 as rank
         FROM progress
         WHERE product BETWEEN ?1 AND ?2
@@ -99,12 +97,12 @@ async fn get_user_rank(
             -1
         )
         AND user_id != ?3  -- Exclude the user themselves from the count
-        "#
-    )
-    .bind(&[p_min.into(), p_max.into(), user_id.into()])?
-    .first::<usize>(Some("rank")) // Directly extract the "rank" column
-    .await?
-    .ok_or_else(|| worker::Error::RustError("User not found".to_string()))?;
+        "#,
+        )
+        .bind(&[p_min.into(), p_max.into(), user_id.into()])?
+        .first::<usize>(Some("rank")) // Directly extract the "rank" column
+        .await?
+        .ok_or_else(|| worker::Error::RustError("User not found".to_string()))?;
 
     Ok(rank)
 }

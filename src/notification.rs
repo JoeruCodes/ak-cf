@@ -52,9 +52,9 @@ impl Read {
 
 #[derive(Deserialize)]
 pub struct TaskResultInput {
-    pub player_ranking: Vec<String>,      // e.g. ["addr1", "addr2", ..., "addr5"]
-    pub flagged_players: Vec<String>,     // subset of player_ranking
-    pub datapoint_id: String,             // for metadata
+    pub player_ranking: Vec<String>, // e.g. ["addr1", "addr2", ..., "addr5"]
+    pub flagged_players: Vec<String>, // subset of player_ranking
+    pub datapoint_id: String,        // for metadata
 }
 
 pub async fn push_notification_to_user_do(
@@ -97,7 +97,6 @@ pub async fn push_notification_to_user_do(
 
     Ok(())
 }
-
 
 pub async fn notify_task_result(input: TaskResultInput, env: &Env) -> Result<()> {
     let unflagged_players: Vec<_> = input
@@ -154,4 +153,3 @@ pub async fn notify_task_result(input: TaskResultInput, env: &Env) -> Result<()>
 
     Ok(())
 }
-

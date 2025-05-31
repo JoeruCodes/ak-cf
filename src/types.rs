@@ -40,7 +40,6 @@ pub enum Op {
     CheckDailyTask(Option<String>),
     ClaimDailyReward(usize),
     SyncData,
-    RequestVoiceKey,
     SubmitVideoLabel(String, String), // (datapoint_id, label)
 }
 

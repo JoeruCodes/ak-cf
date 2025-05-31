@@ -1,117 +1,106 @@
-use serde::{Deserialize, Serialize};
+use reqwest::multipart;
+use serde::Deserialize;
 use worker::*;
 
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ClientSecret {
-    pub value: String,
-    pub expires_at: u64,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct GptVoiceKeyResponse {
-    pub client_secret: ClientSecret,
-}
-
-// Add this struct, for example, after your RegisterBody struct
-#[derive(Deserialize, Serialize, Debug)] // Added Serialize for completeness, Debug for logging
-struct OpenAiTranscriptionResponse {
+// Structure for the response from OpenAI's transcription API
+#[derive(Deserialize, Debug)]
+struct TranscriptionResponse {
     text: String,
 }
 
-
-pub async fn fetch_gpt_voice_key(_: &Env) -> Result<String> {
-    let api_url = ""; // Replace with the actual endpoint
-
-    let mut req = Request::new(api_url, Method::Post)?;
-
-    // Hardcoded API key directly in code
-    let hardcoded_key = "";
-
-    req.headers_mut()?.set("Authorization", &format!("Bearer {}", hardcoded_key))?;
-    req.headers_mut()?.set("Content-Type", "application/json")?;
-
-    let mut res = Fetch::Request(req).send().await?;
-
-
-    println!("{}",res.status_code());
-    let status = res.status_code();
-    if status < 200 || status >= 300 {
-        return Err(Error::RustError(format!(
-            "GPT Voice token fetch failed: {}",
-            status
-        )));
-    }
-
-
-   let gpt_key_response: GptVoiceKeyResponse = res.json().await?;
-let secret_value = gpt_key_response.client_secret.value;
-
-println!("Client secret key: {}", secret_value);
-Ok(secret_value)
+// Structure for the error response from OpenAI's API
+#[derive(Deserialize, Debug)]
+struct OpenAIErrorResponse {
+    error: OpenAIErrorDetails,
 }
 
+#[derive(Deserialize, Debug)]
+struct OpenAIErrorDetails {
+    message: String,
+    #[serde(rename = "type")]
+    error_type: String,
+    param: Option<String>,
+    code: Option<String>,
+}
 
-// Add this new async function
-// pub async fn handle_transcription(mut req: Request, env: Env) -> Result<Response> {
-//     console_log!("Handling transcription request...");
+pub async fn handle_transcription(mut req: Request, env: Env) -> Result<Response> {
+    console_log!("Handling transcription request");
 
-//     let openai_api_key = env.secret("OPENAI_API_KEY")
-//         .map_err(|e| {
-//             console_error!("OPENAI_API_KEY not found: {:?}", e);
-//             Error::RustError("OpenAI API key not configured".into())
-//         })?
-//         .to_string();
+    let api_key = env.secret("OPENAI_API_KEY")?;
 
-//     // Read the audio bytes
-//     let audio_bytes = req.bytes().await.map_err(|e| {
-//         console_error!("Failed to read request body: {:?}", e);
-//         Error::RustError("Failed to read audio data".into())
-//     })?;
+    let form_data = match req.form_data().await {
+        Ok(data) => data,
+        Err(e) => {
+            console_log!("Failed to parse FormData: {:?}", e);
+            return Response::error(format!("Failed to parse FormData: {}", e), 400);
+        }
+    };
 
-//     if audio_bytes.is_empty() {
-//         return Response::error("No audio data received", 400);
-//     }
+    let file_entry = match form_data.get("file") {
+        Some(entry) => entry,
+        None => return Response::error("Missing 'file' field in FormData", 400),
+    };
 
-//     // Create the audio file and set MIME type
-//     let mut audio_file = File::new("audio.wav", audio_bytes);
-//     audio_file.set_type("audio/wav");
+    let file = match file_entry {
+        FormEntry::File(f) => f,
+        _ => return Response::error("'file' field is not a file", 400),
+    };
 
-//     // Prepare multipart form-data
-//     let mut form_data = FormData::new();
-//     form_data.append("file", FormEntry::File(audio_file))?;
-//     form_data.append("model", FormEntry::Field("gpt-4o-transcribe".to_string()))?;
+    console_log!("Received file: {}, size: {}", file.name(), file.size());
+    let file_bytes = file.bytes().await?;
+    let file_part = multipart::Part::bytes(file_bytes)
+        .file_name(file.name())
+        .mime_str(file.type_().as_str())
+        .map_err(|e| worker::Error::RustError(format!("Failed to create file part: {}", e)))?; // Use the mime type from the uploaded file
 
-//     // Set headers
-//     let mut headers = Headers::new();
-//     headers.set("Authorization", &format!("Bearer {}", openai_api_key))?;
+    let model_part = multipart::Part::text("whisper-1");
 
-//     // Build OpenAI request
-//     let mut request_init = RequestInit::new();
-//     request_init.with_method(Method::Post);
-//     request_init.with_body(Some(form_data.into()));
-//     request_init.with_headers(headers);
+    let form = multipart::Form::new()
+        .part("file", file_part)
+        .part("model", model_part);
 
-//     let openai_request = Request::new_with_init(
-//         "https://api.openai.com/v1/audio/transcriptions",
-//         &request_init,
-//     )?;
+    let client = reqwest::Client::new();
+    let openai_response = match client
+        .post("https://api.openai.com/v1/audio/transcriptions")
+        .bearer_auth(api_key)
+        .multipart(form)
+        .send()
+        .await
+    {
+        Ok(res) => res,
+        Err(e) => {
+            console_error!("OpenAI API request failed: {:?}", e);
+            return Response::error(format!("OpenAI API request failed: {}", e), 500);
+        }
+    };
 
-//     let mut openai_response = Fetch::Request(openai_request).send().await.map_err(|e| {
-//         console_error!("OpenAI API request failed: {:?}", e);
-//         Error::RustError("OpenAI API request failed".into())
-//     })?;
+    if !openai_response.status().is_success() {
+        let status = openai_response.status();
+        let error_body: OpenAIErrorResponse = match openai_response.json().await {
+            Ok(body) => body,
+            Err(e) => {
+                console_error!("Failed to parse OpenAI error response: {:?}", e);
+                return Response::error(
+                    format!(
+                        "OpenAI API error ({}) and failed to parse error details",
+                        status
+                    ),
+                    status.as_u16(),
+                );
+            }
+        };
+        console_error!("OpenAI API error: {:?}", error_body);
+        return Response::error(
+            format!("OpenAI API Error: {}", error_body.error.message),
+            status.as_u16(),
+        );
+    }
 
-//     if openai_response.status_code() != 200 {
-//     let status = openai_response.status_code();
-//     let err_msg = openai_response.text().await.unwrap_or_else(|_| "Failed to read OpenAI error response".to_string());
-//     return Response::error(format!("OpenAI API error ({}): {}", status, err_msg), 500);
-// }
-
-//     let response_json: OpenAiTranscriptionResponse = openai_response.json().await.map_err(|e| {
-//         console_error!("Failed to parse OpenAI response: {:?}", e);
-//         Error::RustError("Failed to parse transcription from OpenAI".into())
-//     })?;
-
-//     Response::ok(response_json.text)
-// }
+    match openai_response.json::<TranscriptionResponse>().await {
+        Ok(transcription) => Response::ok(transcription.text),
+        Err(e) => {
+            console_error!("Failed to parse OpenAI success response: {:?}", e);
+            Response::error(format!("Failed to parse OpenAI API response: {}", e), 500)
+        }
+    }
+}

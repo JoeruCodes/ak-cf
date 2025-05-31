@@ -173,7 +173,7 @@ pub fn give_daily_reward(user_data: &mut UserData, index: usize) {
 }
 
 pub async fn fetch_video_tasks(n: usize, env: &Env) -> Result<Vec<VideoTask>> {
-                    println!("{}",100);
+    println!("{}", 100);
 
     let url = "https://your-backend/api/get-videos"; // <-- Replace this
     let payload = serde_json::json!({ "numberOfDatapoints": n }).to_string();
@@ -193,9 +193,9 @@ pub async fn fetch_video_tasks(n: usize, env: &Env) -> Result<Vec<VideoTask>> {
     )?;
 
     let mut response = Fetch::Request(req).send().await?;
-    console_log!("{:?}",response);
+    console_log!("{:?}", response);
     let data: serde_json::Value = response.json().await?;
-    console_log!("{:?}",data);
+    console_log!("{:?}", data);
     let tasks = data
         .as_array()
         .unwrap_or(&vec![])
@@ -224,8 +224,7 @@ pub async fn fetch_video_tasks(n: usize, env: &Env) -> Result<Vec<VideoTask>> {
         })
         .collect();
 
-
-    console_log!("{:?}",tasks);
+    console_log!("{:?}", tasks);
 
     Ok(tasks)
 }
@@ -235,10 +234,7 @@ struct UserIdRow {
     user_id: String,
 }
 
-pub async fn find_user_id_by_referral_code(
-    d1: &D1Database,
-    code: &str,
-) -> Result<Option<String>> {
+pub async fn find_user_id_by_referral_code(d1: &D1Database, code: &str) -> Result<Option<String>> {
     let stmt = d1.prepare("SELECT user_id FROM social_data WHERE referal_code = ?");
     let res = stmt.bind(&[code.into()])?.first::<UserIdRow>(None).await;
 
