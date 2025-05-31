@@ -166,7 +166,7 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
 
                 let password_header = sha256.chain(password_header.as_bytes()).finalize();
 
-                if user_id == username_header && password == hex::encode(password_header) {
+                if (user_name.unwrap_or(user_id)  == username_header) && password == hex::encode(password_header) {
                     // Credentials match, proceed with WebSocket upgrade
                 } else {
                     // Password doesn't match
