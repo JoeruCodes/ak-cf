@@ -59,6 +59,7 @@ impl DurableObject for UserDataWrapper {
         if !is_registered(&self.env.d1("D1_DATABASE").unwrap(), &op_request.user_id).await
             && !matches!(op_request.op, Op::Register(_))
         {
+            console_log!("{}",op_request.user_id);
             return Response::error("User not registered", 400);
         } else if is_registered(&self.env.d1("D1_DATABASE").unwrap(), &op_request.user_id).await
             && matches!(op_request.op, Op::Register(_))
@@ -137,7 +138,7 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
     console_log!("Not a leaderboard or register");
 
     if let Some(upgrade_header) = req.headers().get("Upgrade")? {
-        let Some(username_header) = req.headers().get("username")? else {
+        let Some( mut username_header) = req.headers().get("username")? else {
             // If username header is missing, we can immediately return Unauthorized.
             console_log!("Unauthorized: Missing username");
             return Response::error("Unauthorized: Missing username", 401);
@@ -162,16 +163,22 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
                 user_name,
                 password,
             })) => {
+                
+
                 let sha256 = sha2::Sha256::new();
 
                 let password_header = sha256.chain(password_header.as_bytes()).finalize();
 
-                if (user_name.unwrap_or(user_id)  == username_header) && password == hex::encode(password_header) {
+                if (user_name.as_ref().map(|s| s == &username_header).unwrap_or(false)
+    || user_id == username_header)
+    && password == hex::encode(password_header) {
                     // Credentials match, proceed with WebSocket upgrade
+                    
                 } else {
                     // Password doesn't match
                     return Response::error("Unauthorized: Invalid credentials", 401);
                 }
+                username_header=user_id.clone();
             }
             Ok(None) => {
                 // User not found
@@ -183,6 +190,8 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
                 return Response::error("Internal Server Error", 500);
             }
         }
+                console_log!("Database");
+
 
         if upgrade_header.to_lowercase() == "websocket" {
             let pair = WebSocketPair::new()?;
