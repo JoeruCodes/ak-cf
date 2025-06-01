@@ -327,16 +327,17 @@ impl UserData {
                 if notification.notification_type == NotificationType::Referral {
                     self.social.players_referred += 1;
                     self.progress.social_score += 10;
-                    self.progress.akai_balance += 25;
+                    self.progress.akai_balance+=50;
+
                 } else if notification.notification_type == NotificationType::Performance {
                     if let Some(metadata) = &notification.metadata {
-                        if let Some(akai_str) = metadata.get("akai_earned") {
+                        if let Some(akai_str) = metadata.get("akai_balance") {
                             if let Ok(akai) = akai_str.parse::<usize>() {
                                 self.progress.akai_balance += akai;
                             }
                         }
 
-                        if let Some(iq_str) = metadata.get("iq_change") {
+                        if let Some(iq_str) = metadata.get("iq") {
                             if let Ok(iq) = iq_str.parse::<usize>() {
                                 self.progress.iq += iq;
                             }
@@ -386,6 +387,8 @@ impl UserData {
                         let message = "Your referral code was used!";
                         let mut metadata = HashMap::new();
                         metadata.insert("used_by".to_string(), op_request.user_id.clone());
+                        metadata.insert("social_score".to_string() , "10".to_string());
+                        metadata.insert("akai_balance".to_string() , "25".to_string());
                         if let Err(e) = push_notification_to_user_do(
                             &env,
                             &referrer_user_id,

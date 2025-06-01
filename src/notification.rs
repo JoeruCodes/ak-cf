@@ -13,8 +13,6 @@ pub struct Notification {
     pub message: String,
     pub timestamp: i64,
     pub read: Read,
-
-    // ✅ New field for dynamic data
     pub metadata: Option<HashMap<String, String>>,
 }
 
@@ -52,9 +50,9 @@ impl Read {
 
 #[derive(Deserialize)]
 pub struct TaskResultInput {
-    pub player_ranking: Vec<String>, // e.g. ["addr1", "addr2", ..., "addr5"]
-    pub flagged_players: Vec<String>, // subset of player_ranking
-    pub datapoint_id: String,        // for metadata
+    pub player_ranking: Vec<String>,      // e.g. ["addr1", "addr2", ..., "addr5"]
+    pub flagged_players: Vec<String>,     // subset of player_ranking
+    pub datapoint_id: String,             // for metadata
 }
 
 pub async fn push_notification_to_user_do(
@@ -98,6 +96,7 @@ pub async fn push_notification_to_user_do(
     Ok(())
 }
 
+
 pub async fn notify_task_result(input: TaskResultInput, env: &Env) -> Result<()> {
     let unflagged_players: Vec<_> = input
         .player_ranking
@@ -137,8 +136,8 @@ pub async fn notify_task_result(input: TaskResultInput, env: &Env) -> Result<()>
         };
 
         let mut metadata = HashMap::new();
-        metadata.insert("akai_earned".to_string(), akai.to_string());
-        metadata.insert("iq_change".to_string(), iq.to_string());
+        metadata.insert("akai_balance".to_string(), akai.to_string());
+        metadata.insert("iq".to_string(), iq.to_string());
         metadata.insert("datapoint_id".to_string(), input.datapoint_id.clone());
 
         push_notification_to_user_do(
@@ -153,3 +152,4 @@ pub async fn notify_task_result(input: TaskResultInput, env: &Env) -> Result<()>
 
     Ok(())
 }
+
