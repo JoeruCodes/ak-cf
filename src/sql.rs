@@ -19,7 +19,8 @@ pub async fn create_table_if_not_exists(d1: &D1Database) -> Result<Response> {
         pfp INTEGER,
         user_name TEXT,
         password TEXT,
-        last_login INTEGER NOT NULL
+        last_login INTEGER NOT NULL,
+        real_login INTEGER NOT NULL
     );
 
     -- Create GameState table
@@ -100,7 +101,7 @@ pub async fn insert_new_user(data: &UserData, d1: &D1Database) -> Result<()> {
 
     // Insert into user_profile
     let stmt_profile = d1
-        .prepare("INSERT INTO user_profile (user_name,password, user_id, email, pfp, last_login) VALUES (?, ?, ?, ?, ?,?)");
+        .prepare("INSERT INTO user_profile (user_name,password, user_id, email, pfp, last_login,real_login) VALUES (?, ?, ?, ?, ?,?,?)");
     stmt_profile
         .bind(&[
             data.profile
@@ -120,6 +121,7 @@ pub async fn insert_new_user(data: &UserData, d1: &D1Database) -> Result<()> {
                 .map(JsValue::from)
                 .unwrap_or_else(JsValue::null),
             data.profile.pfp.into(),
+            (data.profile.last_login as f64).into(),
             (data.profile.last_login as f64).into(),
         ])?
         .run()
@@ -230,7 +232,7 @@ pub async fn update_user_data(data: &UserData, d1: &D1Database) -> Result<()> {
 
     // Update user_profile
     let stmt_profile =
-        d1.prepare("UPDATE user_profile SET user_name = ?,password = ?, email = ?, pfp = ?, last_login = ? WHERE user_id = ?");
+        d1.prepare("UPDATE user_profile SET user_name = ?,password = ?, email = ?, pfp = ?, last_login = ? , real_login = ? WHERE user_id = ?");
     stmt_profile
         .bind(&[
             data.profile
@@ -250,6 +252,7 @@ pub async fn update_user_data(data: &UserData, d1: &D1Database) -> Result<()> {
                 .unwrap_or_else(JsValue::null),
             data.profile.pfp.into(),
             (data.profile.last_login as f64).into(),
+            (data.profile.real_login as f64).into(),
             user_id.into(), // WHERE clause
         ])?
         .run()

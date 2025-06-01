@@ -73,12 +73,12 @@ impl DurableObject for UserDataWrapper {
             .resolve_op(&op_request, &self.env.d1("D1_DATABASE").unwrap(), &self.env)
             .await?;
 
-        if !matches!(op_request.op, Op::GetData) {
+        // if !matches!(op_request.op, Op::GetData) {
             if let Err(e) = self.state.storage().put("user_data", &user_data).await {
                 console_log!("Storage put error: {:?}", e);
                 return Response::error("Internal Server Error", 500);
             }
-        }
+        // }
 
         Ok(response)
     }
@@ -175,6 +175,7 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
                     // Credentials match, proceed with WebSocket upgrade
                     
                 } else {
+
                     // Password doesn't match
                     return Response::error("Unauthorized: Invalid credentials", 401);
                 }

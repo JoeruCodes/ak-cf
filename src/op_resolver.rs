@@ -200,9 +200,31 @@ impl UserData {
                 )
             }
             Op::GetData => {
-                self.profile.last_login = Date::now().as_millis() / 1000;
+                let current_time = Date::now().as_millis() / 1000;
+                let time_since_last_login = current_time - self.profile.real_login;
+                let one_hour = 15;
+
+
+                if time_since_last_login >= one_hour {
+                    self.game_state.inventory_aliens += 20;
+                    self.profile.real_login = Date::now().as_millis() / 1000;
+                }
+            
+                
                 Response::from_json(&self)
             }
+            Op::alien => Response::ok(
+                json!({
+                    "real_login" : self.game_state.active_aliens
+                })
+                .to_string(),
+            ),
+            Op::inv => Response::ok(
+                json!({
+                    "inv" : self.game_state.inventory_aliens
+                })
+                .to_string(),
+            ),
             Op::Register(password) => {
                 console_log!("Creating tables if not exists");
                 let sha256 = sha2::Sha256::new();
@@ -327,8 +349,7 @@ impl UserData {
                 if notification.notification_type == NotificationType::Referral {
                     self.social.players_referred += 1;
                     self.progress.social_score += 10;
-                    self.progress.akai_balance+=50;
-
+                    self.progress.akai_balance += 50;
                 } else if notification.notification_type == NotificationType::Performance {
                     if let Some(metadata) = &notification.metadata {
                         if let Some(akai_str) = metadata.get("akai_balance") {
@@ -344,9 +365,7 @@ impl UserData {
                         }
                     }
                 }
-
                 self.notifications.push(notification.clone());
-
                 Response::ok(
                     json!({
                         "status": "Notification added to DO",
@@ -387,8 +406,8 @@ impl UserData {
                         let message = "Your referral code was used!";
                         let mut metadata = HashMap::new();
                         metadata.insert("used_by".to_string(), op_request.user_id.clone());
-                        metadata.insert("social_score".to_string() , "10".to_string());
-                        metadata.insert("akai_balance".to_string() , "25".to_string());
+                        metadata.insert("social_score".to_string(), "10".to_string());
+                        metadata.insert("akai_balance".to_string(), "25".to_string());
                         if let Err(e) = push_notification_to_user_do(
                             &env,
                             &referrer_user_id,

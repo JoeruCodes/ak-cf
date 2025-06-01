@@ -40,6 +40,8 @@ pub enum Op {
     CheckDailyTask(Option<String>),
     ClaimDailyReward(usize),
     SyncData,
+    alien,
+    inv,
     SubmitVideoLabel(String, String), // (datapoint_id, label)
 }
 
@@ -109,6 +111,7 @@ pub struct UserProfile {
     pub user_name: Option<String>,
     pub password: Option<String>,
     pub last_login: u64,
+    pub real_login:u64,
 }
 
 #[derive(Deserialize, Clone, Debug, Serialize)]
@@ -188,10 +191,11 @@ impl Default for UserData {
                 user_name: None,
                 password: Some("123456".to_string()),
                 last_login: Date::now().as_millis() / 1000,
+                real_login: Date::now().as_millis() / 1000,
             },
             game_state: GameState {
                 active_aliens: [0; 16],
-                inventory_aliens: 0,
+                inventory_aliens: 10,
                 power_ups: Vec::new(),
                 king_lvl: 1,
                 total_merged_aliens: 0,
@@ -254,11 +258,11 @@ impl UserData {
         let time_since_last_login = current_time - self.profile.last_login;
         let one_day = 60 * 60 * 24;
         let two_days = one_day * 2;
-        let one_hour = 20;
+        // let one_hour = 30;
 
-        if time_since_last_login >= one_hour {
-            self.game_state.inventory_aliens += 10;
-        }
+        // if time_since_last_login >= one_hour {
+        //     self.game_state.inventory_aliens += 10;
+        // }
 
         if time_since_last_login > one_day && time_since_last_login < two_days {
             self.progress.streak += 1;
@@ -267,5 +271,6 @@ impl UserData {
             self.progress.streak = 0;
             self.profile.last_login = current_time;
         }
+
     }
 }
