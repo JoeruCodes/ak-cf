@@ -6,7 +6,7 @@ use worker::*;
 
 use crate::{
     sql,
-    types::{BadgesKind, GameState, LeagueType, PowerUpKind, PreLabel, UserData, VideoTask},
+    types::{BadgesKind, GameState, LeagueType, McqPreLabel, McqVideoTask, PowerUpKind, Question, TextVideoTask, UserData},
 };
 
 // Helper function to convert power_ups to JSON for SQLite
@@ -172,10 +172,8 @@ pub fn give_daily_reward(user_data: &mut UserData, index: usize) {
     }
 }
 
-pub async fn fetch_video_tasks(n: usize, env: &Env) -> Result<Vec<VideoTask>> {
-    println!("{}", 100);
-
-    let url = "https://your-backend/api/get-videos"; // <-- Replace this
+pub async fn fetch_mcq_video_tasks(n: usize, _env: &Env) -> Result<Vec<McqVideoTask>> {
+    let url = "http://localhost:3001/api/game/fetch-mcq-datapoints"; // <-- Replace this
     let payload = serde_json::json!({ "numberOfDatapoints": n }).to_string();
 
     let req = Request::new_with_init(
@@ -193,38 +191,92 @@ pub async fn fetch_video_tasks(n: usize, env: &Env) -> Result<Vec<VideoTask>> {
     )?;
 
     let mut response = Fetch::Request(req).send().await?;
-    console_log!("{:?}", response);
     let data: serde_json::Value = response.json().await?;
-    console_log!("{:?}", data);
-    let tasks = data
-        .as_array()
-        .unwrap_or(&vec![])
+    let datapoints = data["datapoints"].as_array().cloned().unwrap_or_default();
+
+    let tasks = datapoints
         .iter()
-        .map(|item| VideoTask {
-            id: item["_id"].as_str().unwrap_or_default().to_string(),
-            task_id: item["task_id"].as_str().unwrap_or_default().to_string(),
-            media_url: item["mediaUrl"].as_str().unwrap_or_default().to_string(),
-            pre_label: PreLabel {
-                map_position: item["preLabel"]["map_position"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_string(),
-                summary: item["preLabel"]["summary"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_string(),
-                keywords: item["preLabel"]["keywords"]
-                    .as_array()
-                    .unwrap_or(&vec![])
-                    .iter()
-                    .filter_map(|kw| kw.as_str().map(String::from))
-                    .collect(),
-            },
-            visited: false,
+        .map(|item| {
+            let pre_label_val = &item["preLabel"];
+            let questions_val = pre_label_val["questions"]
+                .as_array()
+                .map(|v| v.as_slice())
+                .unwrap_or(&[]);
+            let keywords_val = pre_label_val["keywords"]
+                .as_array()
+                .map(|v| v.as_slice())
+                .unwrap_or(&[]);
+
+            McqVideoTask {
+                id: item["_id"].as_str().unwrap_or_default().to_string(),
+                task_id: item["task_id"].as_str().unwrap_or_default().to_string(),
+                mediaUrl: item["mediaUrl"].as_str().unwrap_or_default().to_string(),
+                preLabel: McqPreLabel {
+                    map_placement: pre_label_val["map_placement"]["value"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_string(),
+                    summary: pre_label_val["summary"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_string(),
+                    questions: questions_val
+                        .iter()
+                        .map(|q| Question {
+                            q: q["q"].as_str().unwrap_or_default().to_string(),
+                            a: q["a"].as_str().unwrap_or_default().to_string(),
+                            textAnswers: vec![],
+                            mcqAnswers: vec![],
+                        })
+                        .collect(),
+                    keywords: keywords_val
+                        .iter()
+                        .filter_map(|kw| kw.as_str().map(String::from))
+                        .collect(),
+                },
+                visited: false,
+            }
         })
         .collect();
 
-    console_log!("{:?}", tasks);
+    Ok(tasks)
+}
+
+pub async fn fetch_text_video_tasks(n: usize, _env: &Env) -> Result<Vec<TextVideoTask>> {
+    let url = "http://localhost:3001/api/game/fetch-textQ"; // <-- Replace this
+    let payload = serde_json::json!({ "numberOfDatapoints": n }).to_string();
+
+    let req = Request::new_with_init(
+        url,
+        &RequestInit {
+            method: Method::Post,
+            body: Some(payload.into()),
+            headers: {
+                let mut headers = Headers::new();
+                headers.set("Content-Type", "application/json")?;
+                headers
+            },
+            ..Default::default()
+        },
+    )?;
+
+    let mut response = Fetch::Request(req).send().await?;
+    let data: serde_json::Value = response.json().await?;
+    let questions = data["questions"].as_array().cloned().unwrap_or_default();
+
+    let tasks = questions
+        .iter()
+        .map(|item| TextVideoTask {
+            datapointId: item["datapointId"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string(),
+            questionIndex: item["questionIndex"].as_u64().unwrap_or(0) as usize,
+            question: item["question"].as_str().unwrap_or_default().to_string(),
+            mediaUrl: item["mediaUrl"].as_str().unwrap_or_default().to_string(),
+            visited: false,
+        })
+        .collect();
 
     Ok(tasks)
 }
@@ -243,4 +295,4 @@ pub async fn find_user_id_by_referral_code(d1: &D1Database, code: &str) -> Resul
         Ok(None) => Ok(None),
         Err(e) => Err(e),
     }
-}
+} 

@@ -40,9 +40,8 @@ pub enum Op {
     CheckDailyTask(Option<String>),
     ClaimDailyReward(usize),
     SyncData,
-    alien,
-    inv,
-    SubmitVideoLabel(String, String), // (datapoint_id, label)
+    SubmitMcqAnswers(String, Vec<String>), // (datapoint_id, answers)
+    SubmitTextAnswer(String, usize, String), // (datapoint_id, idx, text)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -136,19 +135,41 @@ pub struct Progress {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct VideoTask {
+#[allow(non_snake_case)]
+pub struct Question {
+    pub q: String,
+    pub a: String,
+    pub textAnswers: Vec<String>,
+    pub mcqAnswers: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct McqPreLabel {
+    pub map_placement: String,
+    pub questions: Vec<Question>,
+    pub summary: String,
+    pub keywords: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[allow(non_snake_case)]
+pub struct McqVideoTask {
+    #[serde(rename = "_id")]
     pub id: String,
     pub task_id: String,
-    pub media_url: String,
-    pub pre_label: PreLabel,
+    pub mediaUrl: String,
+    pub preLabel: McqPreLabel,
     pub visited: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct PreLabel {
-    pub map_position: String,
-    pub summary: String,
-    pub keywords: Vec<String>,
+#[allow(non_snake_case)]
+pub struct TextVideoTask {
+    pub datapointId: String,
+    pub questionIndex: usize,
+    pub question: String,
+    pub mediaUrl: String,
+    pub visited: bool,
 }
 
 #[derive(Deserialize, Clone, Debug, Serialize)]
@@ -160,7 +181,8 @@ pub struct DailyProgress {
     pub total_completed: usize,
     pub alien_earned: Option<usize>,
     pub pu_earned: Option<PowerUpKind>,
-    pub video_tasks: Vec<VideoTask>, // <-- NEW
+    pub mcq_video_tasks: Vec<McqVideoTask>,
+    pub text_video_tasks: Vec<TextVideoTask>,
 }
 
 #[derive(Deserialize, Clone, Debug, Serialize)]
@@ -222,7 +244,8 @@ impl Default for UserData {
             notifications: Vec::new(), // <-- added this,
             daily: DailyProgress {
                 links: Vec::new(),
-                video_tasks: Vec::new(), // <-- added here
+                mcq_video_tasks: Vec::new(),
+                text_video_tasks: Vec::new(),
                 daily_merge: (0, 0, false),
                 daily_annotate: (0, 0, false),
                 daily_powerups: (0, 0, false),

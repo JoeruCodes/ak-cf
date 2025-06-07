@@ -2,7 +2,10 @@ use crate::daily_task::Links;
 use crate::gpt_voice::*;
 use crate::notification::{push_notification_to_user_do, NotificationType};
 use crate::types::DurableObjectAugmentedMsg;
-use crate::utils::{fetch_video_tasks, find_user_id_by_referral_code, give_daily_reward};
+use crate::utils::{
+    fetch_mcq_video_tasks, fetch_text_video_tasks, find_user_id_by_referral_code,
+    give_daily_reward,
+};
 use crate::{daily_task::*, gpt_voice};
 use rand::Rng;
 use serde_json::json;
@@ -213,18 +216,6 @@ impl UserData {
                 
                 Response::from_json(&self)
             }
-            Op::alien => Response::ok(
-                json!({
-                    "real_login" : self.game_state.active_aliens
-                })
-                .to_string(),
-            ),
-            Op::inv => Response::ok(
-                json!({
-                    "inv" : self.game_state.inventory_aliens
-                })
-                .to_string(),
-            ),
             Op::Register(password) => {
                 console_log!("Creating tables if not exists");
                 let sha256 = sha2::Sha256::new();
@@ -374,6 +365,7 @@ impl UserData {
                     .to_string(),
                 )
             }
+            
             Op::MarkNotificationRead(notification_id) => {
                 let mut found = false;
 
@@ -398,6 +390,7 @@ impl UserData {
                     Response::error("Notification not found", 404)
                 }
             }
+            
             Op::UseReferralCode(code) => {
                 let env = env.clone();
 
@@ -435,6 +428,7 @@ impl UserData {
                     }
                 }
             }
+            
             Op::UpdateDbFromDo => match crate::sql::update_user_data(self, d1).await {
                 Ok(_) => Response::ok(
                     json!({
@@ -447,20 +441,10 @@ impl UserData {
                     Response::error("Failed to update DB", 500)
                 }
             },
+            
             Op::GenerateDailyTasks => {
+                let now = worker::Date::now().as_millis();
                 console_log!("100");
-                let now = worker::Date::now().as_millis() as u64 / 1000;
-                let q_seconds = 1000; // 1 day interval
-
-                let last_login = self.profile.last_login;
-
-                // if now - last_login < q_seconds && !self.daily.links.is_empty() {
-                //     return Response::from_json(&self.daily);
-                // }
-
-                // if self.daily.total_completed < 3 && self.daily.links.len() > 0 {
-                //     self.progress.social_score -= 5;
-                // }
 
                 let mut rng = rand::thread_rng();
                 let random_links = get_random_links(2)
@@ -472,25 +456,169 @@ impl UserData {
                     })
                     .collect();
 
-                let number_of_videos_to_request = ((self.progress.iq) / 50 + 1) * 5;
+                let level = self.progress.iq / 50 + 1;
+                let num_mcq_tasks = level * 4;
+                let num_text_tasks = level * 6;
 
-                let video_tasks = fetch_video_tasks(number_of_videos_to_request, &env)
+                let mcq_tasks = fetch_mcq_video_tasks(num_mcq_tasks, &env)
                     .await
                     .unwrap_or_default();
 
-                console_log!("{}", video_tasks.len());
+                let text_tasks = fetch_text_video_tasks(num_text_tasks, &env)
+                    .await
+                    .unwrap_or_default();
+
+                console_log!("MCQ Tasks fetched: {}", mcq_tasks.len());
+                console_log!("Text Tasks fetched: {}", text_tasks.len());
 
                 self.daily.links = random_links;
-                self.daily.video_tasks = video_tasks;
+                self.daily.mcq_video_tasks = mcq_tasks;
+                self.daily.text_video_tasks = text_tasks;
                 self.daily.daily_merge = (0, rng.gen_range(2..=4), false);
                 self.daily.daily_annotate = (0, rng.gen_range(3..=7), false);
                 self.daily.daily_powerups = (0, rng.gen_range(2..=6), false);
-                self.profile.last_login = now;
                 self.daily.alien_earned = None;
                 self.daily.pu_earned = None;
                 self.daily.total_completed = 0;
 
                 Response::from_json(&self.daily)
+            }
+
+            Op::SubmitMcqAnswers(datapoint_id, answers) => {
+                if answers.len() != 5 {
+                    return Response::error("Exactly 5 answers are required.", 400);
+                }
+
+                let task_index = match self
+                    .daily
+                    .mcq_video_tasks
+                    .iter()
+                    .position(|task| task.id == datapoint_id.clone())
+                {
+                    Some(index) => index,
+                    None => return Response::error("Task not found", 404),
+                };
+
+                if self.daily.mcq_video_tasks[task_index].visited {
+                    return Response::error("Task already completed", 400);
+                }
+
+                let questions = &self.daily.mcq_video_tasks[task_index].preLabel.questions;
+                if questions.len() != 5 {
+                    return Response::error("Task data is invalid.", 500);
+                }
+
+                // Map answers to questions for the backend payload
+                let answer_obj: HashMap<String, String> = questions
+                    .iter()
+                    .map(|q| q.q.clone())
+                    .zip(answers.iter().cloned())
+                    .collect();
+
+                let payload = json!({
+                    "datapointId": datapoint_id,
+                    "answerObj": answer_obj
+                });
+
+                // Submit to external endpoint
+                let req = Request::new_with_init(
+                    "http://localhost:3001/api/game/add-mcq-answer", // Placeholder URL
+                    &RequestInit {
+                        method: Method::Post,
+                        body: Some(payload.to_string().into()),
+                        headers: {
+                            let mut headers = Headers::new();
+                            headers.set("Content-Type", "application/json")?;
+                            headers
+                        },
+                        ..Default::default()
+                    },
+                )?;
+
+                let res = Fetch::Request(req).send().await?;
+                if !res.status_code() == 200 {
+                    return Response::error("Failed to submit answers to backend", 500);
+                }
+
+                // Update local state after successful submission
+                self.daily.mcq_video_tasks[task_index].visited = true;
+                self.daily.daily_annotate.0 += 1;
+                if self.daily.daily_annotate.0 == self.daily.daily_annotate.1 {
+                    self.daily.daily_annotate.2 = true;
+                    self.daily.total_completed += 1;
+                    self.progress.social_score += 2;
+                }
+
+                calculate_product(self);
+
+                Response::ok(
+                    json!({
+                        "status": "MCQ answers submitted successfully",
+                        "daily_progress": &self.daily
+                    })
+                    .to_string(),
+                )
+            }
+
+            Op::SubmitTextAnswer(datapoint_id, idx, text) => {
+                let task_index = match self
+                    .daily
+                    .text_video_tasks
+                    .iter()
+                    .position(|task| task.datapointId == datapoint_id.clone() && task.questionIndex == idx.clone())
+                {
+                    Some(index) => index,
+                    None => return Response::error("Task not found", 404),
+                };
+
+                if self.daily.text_video_tasks[task_index].visited {
+                    return Response::error("Task already completed", 400);
+                }
+
+                // Submit to external endpoint first
+                let payload = json!({
+                    "datapointId": datapoint_id,
+                    "idx": idx,
+                    "text": text,
+                });
+
+                let req = Request::new_with_init(
+                    "http://localhost:3001/api/game/add-text-answer", // Placeholder URL
+                    &RequestInit {
+                        method: Method::Post,
+                        body: Some(payload.to_string().into()),
+                        headers: {
+                            let mut headers = Headers::new();
+                            headers.set("Content-Type", "application/json")?;
+                            headers
+                        },
+                        ..Default::default()
+                    },
+                )?;
+
+                let res = Fetch::Request(req).send().await?;
+                if !res.status_code() == 200 {
+                    return Response::error("Failed to submit text answer to backend", 500);
+                }
+
+                // Update local state after successful submission
+                self.daily.text_video_tasks[task_index].visited = true;
+                self.daily.daily_annotate.0 += 1;
+                if self.daily.daily_annotate.0 == self.daily.daily_annotate.1 {
+                    self.daily.daily_annotate.2 = true;
+                    self.daily.total_completed += 1;
+                    self.progress.social_score += 2;
+                }
+
+                calculate_product(self);
+
+                Response::ok(
+                    json!({
+                        "status": "Text answer submitted successfully",
+                        "daily_progress": &self.daily
+                    })
+                    .to_string(),
+                )
             }
 
             Op::CheckDailyTask(maybe_url) => {
@@ -512,6 +640,7 @@ impl UserData {
                 }
                 Response::from_json(&self.daily)
             }
+
             Op::ClaimDailyReward(index) => {
                 give_daily_reward(self, *index);
                 Response::ok(
@@ -526,48 +655,15 @@ impl UserData {
                     .to_string(),
                 )
             }
+            
             Op::SyncData => match crate::sql::update_user_data(self, d1).await {
                 Ok(_) => Response::ok("Data synced successfully"),
                 Err(e) => {
                     console_error!("Error syncing data: {:?}", e);
                     Response::error("Failed to sync data", 500)
                 }
-            },
-            Op::SubmitVideoLabel(datapoint_id, label) => {
-                let payload = serde_json::json!({
-                    "datapointId": datapoint_id,
-                    "label": label
-                })
-                .to_string();
-
-                let req = Request::new_with_init(
-                    "http://localhost:3001/api/game/label-datapoint",
-                    &RequestInit {
-                        method: Method::Post,
-                        body: Some(payload.into()),
-                        headers: {
-                            let mut headers = Headers::new();
-                            headers.set("Content-Type", "application/json")?;
-                            headers
-                        },
-                        ..Default::default()
-                    },
-                )?;
-
-                let res = Fetch::Request(req).send().await?;
-                let status = res.status_code();
-
-                if status >= 200 && status < 300 {
-                    Response::from_json(&serde_json::json!({
-                        "message": "Label submitted successfully"
-                    }))
-                } else {
-                    Response::from_json(&serde_json::json!({
-                        "error": "Failed to submit label",
-                        "status": status
-                    }))
-                }
             }
+            
         }
     }
 }
