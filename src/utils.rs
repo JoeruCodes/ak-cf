@@ -175,7 +175,6 @@ pub fn give_daily_reward(user_data: &mut UserData, index: usize) {
 pub async fn fetch_mcq_video_tasks(n: usize, _env: &Env) -> Result<Vec<McqVideoTask>> {
     let url = "http://localhost:3001/api/game/fetch-mcq-datapoints"; // <-- Replace this
     let payload = serde_json::json!({ "numberOfDatapoints": n }).to_string();
-
     let req = Request::new_with_init(
         url,
         &RequestInit {
@@ -190,9 +189,15 @@ pub async fn fetch_mcq_video_tasks(n: usize, _env: &Env) -> Result<Vec<McqVideoT
         },
     )?;
 
+
     let mut response = Fetch::Request(req).send().await?;
+    console_log!("{:?}" , response);
+
     let data: serde_json::Value = response.json().await?;
+
     let datapoints = data["datapoints"].as_array().cloned().unwrap_or_default();
+
+    console_log!("{}" , datapoints.len());
 
     let tasks = datapoints
         .iter()
@@ -244,8 +249,8 @@ pub async fn fetch_mcq_video_tasks(n: usize, _env: &Env) -> Result<Vec<McqVideoT
 
 pub async fn fetch_text_video_tasks(n: usize, _env: &Env) -> Result<Vec<TextVideoTask>> {
     let url = "http://localhost:3001/api/game/fetch-textQ"; // <-- Replace this
-    let payload = serde_json::json!({ "numberOfDatapoints": n }).to_string();
-
+    let payload = serde_json::json!({ "noOfQues": n }).to_string();
+console_log!("{}" , n);
     let req = Request::new_with_init(
         url,
         &RequestInit {
@@ -259,10 +264,18 @@ pub async fn fetch_text_video_tasks(n: usize, _env: &Env) -> Result<Vec<TextVide
             ..Default::default()
         },
     )?;
+    console_log!("{}" , 100);
+
 
     let mut response = Fetch::Request(req).send().await?;
+    console_log!("{}" , 200);
+
     let data: serde_json::Value = response.json().await?;
+    console_log!("{}" , 300);
+
     let questions = data["questions"].as_array().cloned().unwrap_or_default();
+    console_log!("{}" , 400);
+
 
     let tasks = questions
         .iter()
