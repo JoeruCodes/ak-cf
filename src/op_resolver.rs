@@ -517,7 +517,8 @@ impl UserData {
 
                 let payload = json!({
                     "datapointId": datapoint_id,
-                    "answerObj": answer_obj
+                    "answerObj": answer_obj,
+                    "playerId" : self.profile.user_id,
                 });
 
                 // Submit to external endpoint
@@ -580,6 +581,7 @@ impl UserData {
                     "datapointId": datapoint_id,
                     "idx": idx,
                     "text": text,
+                    "playerId" : self.profile.user_id,
                 });
 
                 let req = Request::new_with_init(
