@@ -1,12 +1,13 @@
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use serde_json::Value;
+use serde_json::{json, Value};
 use worker::D1Database;
 use worker::*;
 
 use crate::{
     sql,
     types::{BadgesKind, GameState, LeagueType, McqPreLabel, McqVideoTask, PowerUpKind, Question, TextVideoTask, UserData},
+    notification::{Notification, NotificationType},
 };
 
 // Helper function to convert power_ups to JSON for SQLite
@@ -247,51 +248,68 @@ pub async fn fetch_mcq_video_tasks(n: usize, _env: &Env) -> Result<Vec<McqVideoT
     Ok(tasks)
 }
 
-pub async fn fetch_text_video_tasks(n: usize, _env: &Env) -> Result<Vec<TextVideoTask>> {
-    let url = "http://localhost:3001/api/game/fetch-textQ"; // <-- Replace this
-    let payload = serde_json::json!({ "noOfQues": n }).to_string();
-console_log!("{}" , n);
-    let req = Request::new_with_init(
-        url,
-        &RequestInit {
-            method: Method::Post,
-            body: Some(payload.into()),
-            headers: {
-                let mut headers = Headers::new();
-                headers.set("Content-Type", "application/json")?;
-                headers
-            },
-            ..Default::default()
-        },
-    )?;
-    console_log!("{}" , 100);
+pub async fn fetch_text_video_tasks(
+    num_tasks: usize,
+    env: &Env,
+) -> Result<Vec<TextVideoTask>> {
+    let url = "http://localhost:3001/api/game/fetch-textQ";
+    let payload = json!({ "noOfQues": num_tasks });
 
+    let mut request_init = RequestInit::new();
+    request_init
+        .with_method(Method::Post)
+        .with_body(Some(payload.to_string().into()))
+        .with_headers({
+            let mut headers = Headers::new();
+            headers.set("Content-Type", "application/json")?;
+            headers
+        });
 
-    let mut response = Fetch::Request(req).send().await?;
-    console_log!("{}" , 200);
+    let request = Request::new_with_init(url, &request_init)?;
+    let mut response = Fetch::Request(request).send().await?;
 
-    let data: serde_json::Value = response.json().await?;
-    console_log!("{}" , 300);
+    if response.status_code() == 200 {
+        let body: Value = response.json().await?;
+        console_log!("[RAW BODY]: {}", body.to_string());
+        if let Some(questions_val) = body.get("questions") {
+            if let Some(questions_arr) = questions_val.as_array() {
+                let tasks: Vec<TextVideoTask> = questions_arr
+                    .iter()
+                    .map(|q| {
+                        let datapoint_id = q["datapointId"].as_str().unwrap_or_default().to_string();
+                        let question_index = q["questionIndex"].as_u64().unwrap_or_default() as usize;
+                        let question = q["question"].as_str().unwrap_or_default().to_string();
+                        let map_placement = q["map_placement"].as_str().unwrap_or_default().to_string();
+                        let keywords: Vec<String> = q["keywords"]
+                            .as_array()
+                            .unwrap_or(&Vec::new())
+                            .iter()
+                            .map(|k| k.as_str().unwrap_or_default().to_string())
+                            .collect();
 
-    let questions = data["questions"].as_array().cloned().unwrap_or_default();
-    console_log!("{}" , 400);
+                        TextVideoTask {
+                            datapointId: datapoint_id,
+                            questionIndex: question_index,
+                            question: question,
+                            mediaUrl: "".to_string(), // Placeholder for mediaUrl
+                            visited: false,
+                            map_placement,
+                            keywords,
+                        }
+                    })
+                    .collect();
 
+                return Ok(tasks);
+            }
+        }
+    } else {
+        console_error!(
+            "Failed to fetch text video tasks: {}",
+            response.status_code()
+        );
+    }
 
-    let tasks = questions
-        .iter()
-        .map(|item| TextVideoTask {
-            datapointId: item["datapointId"]
-                .as_str()
-                .unwrap_or_default()
-                .to_string(),
-            questionIndex: item["questionIndex"].as_u64().unwrap_or(0) as usize,
-            question: item["question"].as_str().unwrap_or_default().to_string(),
-            mediaUrl: item["mediaUrl"].as_str().unwrap_or_default().to_string(),
-            visited: false,
-        })
-        .collect();
-
-    Ok(tasks)
+    Ok(Vec::new())
 }
 
 #[derive(serde::Deserialize)]

@@ -170,6 +170,8 @@ pub struct TextVideoTask {
     pub question: String,
     pub mediaUrl: String,
     pub visited: bool,
+    pub map_placement: String,
+    pub keywords: Vec<String>,
 }
 
 #[derive(Deserialize, Clone, Debug, Serialize)]
