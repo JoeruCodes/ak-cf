@@ -405,6 +405,11 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
         let result = leaderboard::handle_leaderboard(req, &env).await;
         console_log!("Leaderboard handler result: {:?}", result);
         return result;
+    } else if path == "/api/notify_task_result" {
+        if req.method() != Method::Post {
+            return Response::error("Method Not Allowed", 405);
+        }
+        return notification::notify_task_result(req, &env).await;
     } else if path == "/api/register" {
         if req.method() != Method::Post {
             return Response::error("Method Not Allowed", 405);
@@ -442,20 +447,6 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
         };
         
         return do_stub.fetch_with_request(do_req).await;
-    } else if path == "/api/notify_task_result" {
-        if req.method() != Method::Post {
-            return Response::error("Method Not Allowed", 405);
-        }
-
-        let input: notification::TaskResultInput = match req.json().await {
-            Ok(data) => data,
-            Err(_) => return Response::error("Invalid JSON", 400),
-        };
-
-        return match notification::notify_task_result(input, &env).await {
-            Ok(_) => Response::ok("Notifications sent"),
-            Err(e) => Response::error(format!("Failed: {}", e), 500),
-        };
     } else if path == "/api/transcribe" {
         console_log!("Matched transcribe route");
         if req.method() != Method::Post {

@@ -350,8 +350,10 @@ impl UserData {
                         }
 
                         if let Some(iq_str) = metadata.get("iq") {
-                            if let Ok(iq) = iq_str.parse::<usize>() {
-                                self.progress.iq += iq;
+                            if let Ok(iq_change) = iq_str.parse::<isize>() {
+                                let current_iq = self.progress.iq as isize;
+                                let new_iq = (current_iq + iq_change).max(0);
+                                self.progress.iq = new_iq as usize;
                             }
                         }
                     }

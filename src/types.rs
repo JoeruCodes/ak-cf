@@ -6,6 +6,7 @@ use rand::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use worker::{console_log, Date};
+use std::collections::HashMap;
 
 use crate::notification::{Notification, Read};
 use crate::{
@@ -299,3 +300,4 @@ impl UserData {
 
     }
 }
+
