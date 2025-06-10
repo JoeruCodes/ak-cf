@@ -128,6 +128,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.2.15",
  "hex",
+ "js-sys",
  "once_cell",
  "rand",
  "reqwest",
@@ -135,6 +136,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "uuid",
+ "web-sys",
  "worker",
  "worker-macros",
 ]

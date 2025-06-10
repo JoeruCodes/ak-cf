@@ -4,7 +4,7 @@ use crate::notification::{push_notification_to_user_do, NotificationType};
 use crate::types::DurableObjectAugmentedMsg;
 use crate::utils::{
     fetch_mcq_video_tasks, fetch_text_video_tasks, find_user_id_by_referral_code,
-    give_daily_reward,
+    give_daily_reward, BASE_URL,
 };
 use crate::{daily_task::*, gpt_voice};
 use rand::Rng;
@@ -488,7 +488,7 @@ impl UserData {
 
             Op::SubmitMcqAnswers(datapoint_id, answers) => {
                 if answers.len() != 5 {
-                    return Response::error("Exactly 5 answers are required.", 400);
+                    return Response::error(json!({"error": "Exactly 5 answers are required."}).to_string(), 400);
                 }
 
                 let task_index = match self
@@ -498,34 +498,34 @@ impl UserData {
                     .position(|task| task.id == datapoint_id.clone())
                 {
                     Some(index) => index,
-                    None => return Response::error("Task not found", 404),
+                    None => return Response::error(json!({"error": "Task not found"}).to_string(), 404),
                 };
 
                 if self.daily.mcq_video_tasks[task_index].visited {
-                    return Response::error("Task already completed", 400);
+                    return Response::error(json!({"error": "Task already completed"}).to_string(), 400);
                 }
 
                 let questions = &self.daily.mcq_video_tasks[task_index].preLabel.questions;
                 if questions.len() != 5 {
-                    return Response::error("Task data is invalid.", 500);
+                    return Response::error(json!({"error": "Task data is invalid."}).to_string(), 500);
                 }
 
                 // Map answers to questions for the backend payload
-                let answer_obj: HashMap<String, String> = questions
+                let answer_obj: HashMap<String, String> = answers
                     .iter()
-                    .map(|q| q.q.clone())
-                    .zip(answers.iter().cloned())
+                    .enumerate()
+                    .map(|(index, answer)| (index.to_string(), answer.clone()))
                     .collect();
 
                 let payload = json!({
                     "datapointId": datapoint_id,
-                    "answerObj": answer_obj,
-                    "playerId" : self.profile.user_id,
+                    "playerId": op_request.user_id,
+                    "answerObj": answer_obj
                 });
 
                 // Submit to external endpoint
                 let req = Request::new_with_init(
-                    "http://localhost:3001/api/game/add-mcq-answer", // Placeholder URL
+                    &format!("{}/api/game/add-mcq-answer", BASE_URL), // Replace YOUR_LOCAL_IP
                     &RequestInit {
                         method: Method::Post,
                         body: Some(payload.to_string().into()),
@@ -540,7 +540,7 @@ impl UserData {
 
                 let res = Fetch::Request(req).send().await?;
                 if !res.status_code() == 200 {
-                    return Response::error("Failed to submit answers to backend", 500);
+                    return Response::error(json!({"error": "Failed to submit answers to backend"}).to_string(), 500);
                 }
 
                 // Update local state after successful submission
@@ -571,23 +571,23 @@ impl UserData {
                     .position(|task| task.datapointId == datapoint_id.clone() && task.questionIndex == idx.clone())
                 {
                     Some(index) => index,
-                    None => return Response::error("Task not found", 404),
+                    None => return Response::error(json!({"error": "Task not found"}).to_string(), 404),
                 };
 
                 if self.daily.text_video_tasks[task_index].visited {
-                    return Response::error("Task already completed", 400);
+                    return Response::error(json!({"error": "Task already completed"}).to_string(), 400);
                 }
 
                 // Submit to external endpoint first
                 let payload = json!({
                     "datapointId": datapoint_id,
+                    "playerId": op_request.user_id,
                     "idx": idx,
                     "text": text,
-                    "playerId" : self.profile.user_id,
                 });
 
                 let req = Request::new_with_init(
-                    "http://localhost:3001/api/game/add-text-answer", // Placeholder URL
+                    &format!("{}/api/game/add-text-answer", BASE_URL), // Replace YOUR_LOCAL_IP
                     &RequestInit {
                         method: Method::Post,
                         body: Some(payload.to_string().into()),
@@ -602,7 +602,7 @@ impl UserData {
 
                 let res = Fetch::Request(req).send().await?;
                 if !res.status_code() == 200 {
-                    return Response::error("Failed to submit text answer to backend", 500);
+                    return Response::error(json!({"error": "Failed to submit text answer to backend"}).to_string(), 500);
                 }
 
                 // Update local state after successful submission

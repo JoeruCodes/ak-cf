@@ -173,11 +173,13 @@ pub fn give_daily_reward(user_data: &mut UserData, index: usize) {
     }
 }
 
+pub const BASE_URL: &str = "http://localhost:3001";
+
 pub async fn fetch_mcq_video_tasks(n: usize, _env: &Env) -> Result<Vec<McqVideoTask>> {
-    let url = "http://localhost:3001/api/game/fetch-mcq-datapoints"; // <-- Replace this
+    let url = format!("{}/api/game/fetch-mcq-datapoints", BASE_URL); // <-- Replace this
     let payload = serde_json::json!({ "numberOfDatapoints": n }).to_string();
     let req = Request::new_with_init(
-        url,
+        &url,
         &RequestInit {
             method: Method::Post,
             body: Some(payload.into()),
@@ -252,7 +254,7 @@ pub async fn fetch_text_video_tasks(
     num_tasks: usize,
     env: &Env,
 ) -> Result<Vec<TextVideoTask>> {
-    let url = "http://localhost:3001/api/game/fetch-textQ";
+    let url = format!("{}/api/game/fetch-textQ", BASE_URL);
     let payload = json!({ "noOfQues": num_tasks });
 
     let mut request_init = RequestInit::new();
@@ -265,7 +267,7 @@ pub async fn fetch_text_video_tasks(
             headers
         });
 
-    let request = Request::new_with_init(url, &request_init)?;
+    let request = Request::new_with_init(&url, &request_init)?;
     let mut response = Fetch::Request(request).send().await?;
 
     if response.status_code() == 200 {
@@ -279,7 +281,8 @@ pub async fn fetch_text_video_tasks(
                         let datapoint_id = q["datapointId"].as_str().unwrap_or_default().to_string();
                         let question_index = q["questionIndex"].as_u64().unwrap_or_default() as usize;
                         let question = q["question"].as_str().unwrap_or_default().to_string();
-                        let map_placement = q["map_placement"].as_str().unwrap_or_default().to_string();
+                        let media_url = q["mediaUrl"].as_str().unwrap_or_default().to_string();
+                        let map_placement = q["map_placement"]["value"].as_str().unwrap_or_default().to_string();
                         let keywords: Vec<String> = q["keywords"]
                             .as_array()
                             .unwrap_or(&Vec::new())
@@ -291,7 +294,7 @@ pub async fn fetch_text_video_tasks(
                             datapointId: datapoint_id,
                             questionIndex: question_index,
                             question: question,
-                            mediaUrl: "".to_string(), // Placeholder for mediaUrl
+                            mediaUrl: media_url,
                             visited: false,
                             map_placement,
                             keywords,

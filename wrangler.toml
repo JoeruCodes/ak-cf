@@ -22,5 +22,5 @@ enabled = true
 
 [[d1_databases]]
 binding = "D1_DATABASE"
-database_name = "d1_database"
-database_id = "d1_database"
+database_name = "game-data"
+database_id = "e877fbad-7cdd-4c94-9d4a-e369877b8cc2"
