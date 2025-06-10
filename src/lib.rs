@@ -413,6 +413,13 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
         console_log!("Leaderboard handler result: {:?}", result);
         return result;
     } else if path == "/api/notify_task_result" {
+        // Server-to-server authentication
+        let auth_header = req.headers().get("Authorization")?.unwrap_or_default();
+        let expected_token = format!("Bearer {}", env.secret("SERVER_API_KEY")?.to_string());
+        if auth_header != expected_token {
+            return Response::error("Unauthorized", 401);
+        }
+
         if req.method() != Method::Post {
             return Response::error("Method Not Allowed", 405);
         }
