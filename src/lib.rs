@@ -7,6 +7,7 @@ use utils::is_registered;
 use wasm_bindgen::JsValue;
 use worker::*;
 
+mod auth;
 mod daily_task;
 mod gpt_voice;
 mod leaderboard;
@@ -401,6 +402,9 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
 
     console_log!("Path: {:?}", path);
     if path == "/api/leaderboard" {
+        if auth::authenticate_user(&req, &env).await?.is_none() {
+            return Response::error("Unauthorized", 401);
+        }
         console_log!("Matched leaderboard route");
         if req.method() != Method::Get {
             return Response::error("Method Not Allowed", 405);
@@ -451,6 +455,9 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
         
         return do_stub.fetch_with_request(do_req).await;
     } else if path == "/api/transcribe" {
+        if auth::authenticate_user(&req, &env).await?.is_none() {
+            return Response::error("Unauthorized", 401);
+        }
         console_log!("Matched transcribe route");
         if req.method() != Method::Post {
             return Response::error("Method Not Allowed", 405);
