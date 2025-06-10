@@ -205,7 +205,7 @@ impl UserData {
             Op::GetData => {
                 let current_time = Date::now().as_millis() / 1000;
                 let time_since_last_login = current_time - self.profile.real_login;
-                let one_hour = 15;
+                let one_hour = 60 * 60;
 
 
                 if time_since_last_login >= one_hour {
@@ -446,6 +446,17 @@ impl UserData {
             
             Op::GenerateDailyTasks => {
                 let now = worker::Date::now().as_millis();
+                let one_day_in_millis = 24 * 60 * 60 * 1000;
+
+                if now - self.daily.last_task_generation < one_day_in_millis {
+                    return Response::error(
+                        json!({"error": "A new set of tasks is not available yet."}).to_string(),
+                        429, 
+                    );
+                }
+                
+                self.daily.last_task_generation = now;
+                
                 console_log!("100");
 
                 let mut rng = rand::thread_rng();

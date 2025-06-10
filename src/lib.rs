@@ -39,6 +39,7 @@ impl DurableObject for UserDataWrapper {
 
             // Extract the username from the headers, similar to the main fetch logic.
             // This username is the human-readable ID.
+
             match req.headers().get("username")? {
                 Some(username_from_header) => {
                     self.user_id_for_session = Some(username_from_header.clone());
@@ -215,6 +216,8 @@ impl DurableObject for UserDataWrapper {
                 notif.user_id = do_name.clone();
             }
         }
+
+        user_data.calculate_last_login();
         
         let op_msg = DurableObjectAugmentedMsg {
             user_id: do_name.clone(),

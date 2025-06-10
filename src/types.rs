@@ -186,6 +186,7 @@ pub struct DailyProgress {
     pub pu_earned: Option<PowerUpKind>,
     pub mcq_video_tasks: Vec<McqVideoTask>,
     pub text_video_tasks: Vec<TextVideoTask>,
+    pub last_task_generation: u64,
 }
 
 #[derive(Deserialize, Clone, Debug, Serialize)]
@@ -255,6 +256,7 @@ impl Default for UserData {
                 total_completed: 0,
                 alien_earned: None,
                 pu_earned: None,
+                last_task_generation: 0,
             },
         };
 
@@ -278,17 +280,12 @@ impl Default for UserData {
 
 impl UserData {
     pub fn calculate_last_login(&mut self) {
+        // Streak Calculation Logic
         console_log!("calculating streak");
         let current_time = Date::now().as_millis() / 1000;
-        console_log!("current time: {:?}", current_time);
         let time_since_last_login = current_time - self.profile.last_login;
         let one_day = 60 * 60 * 24;
         let two_days = one_day * 2;
-        // let one_hour = 30;
-
-        // if time_since_last_login >= one_hour {
-        //     self.game_state.inventory_aliens += 10;
-        // }
 
         if time_since_last_login > one_day && time_since_last_login < two_days {
             self.progress.streak += 1;
