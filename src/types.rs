@@ -227,7 +227,7 @@ impl Default for UserData {
                 total_merged_aliens: 0,
             },
             progress: Progress {
-                iq: 0,
+                iq: 50,
                 social_score: 0,
                 all_task_done: false,
                 product: 0,
