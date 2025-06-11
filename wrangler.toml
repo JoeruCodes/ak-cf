@@ -23,4 +23,4 @@ enabled = true
 [[d1_databases]]
 binding = "D1_DATABASE"
 database_name = "game-data"
-database_id = "76b819ce-4bdf-4b02-99d9-4db19e6cd212"
+database_id = "a946c559-2b0c-43e9-9516-6a143881ab26"
