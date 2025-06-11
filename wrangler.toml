@@ -14,8 +14,8 @@ bindings = [
 crons = ["*/10 * * * *"]
 
 [[migrations]]
-tag = "v1"
-new_classes = [ "UserDataWrapper" ]
+tag = "v2"
+new_sqlite_classes = [ "UserDataWrapper" ]
 
 [observability.logs]
 enabled = true
@@ -23,4 +23,4 @@ enabled = true
 [[d1_databases]]
 binding = "D1_DATABASE"
 database_name = "game-data"
-database_id = "49113230-c0dc-486f-bd87-72bfcf7d7b3c"
+database_id = "76b819ce-4bdf-4b02-99d9-4db19e6cd212"
