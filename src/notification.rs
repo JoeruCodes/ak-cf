@@ -60,7 +60,7 @@ pub struct RewardConfig {
 pub fn get_reward_config(task_type: &str) -> Option<RewardConfig> {
     let mut map = HashMap::new();
     map.insert("mcq", RewardConfig { akai_on_correct: 10, akai_on_incorrect: 0, iq_on_correct: 5, iq_on_incorrect: -10 });
-    map.insert("video", RewardConfig { akai_on_correct: 15, akai_on_incorrect: 0, iq_on_correct: 7, iq_on_incorrect: -10 });
+    map.insert("text", RewardConfig { akai_on_correct: 15, akai_on_incorrect: 0, iq_on_correct: 7, iq_on_incorrect: -10 });
     map.insert("audio", RewardConfig { akai_on_correct: 20, akai_on_incorrect: 0, iq_on_correct: 10, iq_on_incorrect: -3 });
     map.get(task_type).copied()
 }
