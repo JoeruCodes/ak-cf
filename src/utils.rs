@@ -173,7 +173,7 @@ pub fn give_daily_reward(user_data: &mut UserData, index: usize) {
     }
 }
 
-pub const BASE_URL: &str = "http://localhost:3001";
+pub const BASE_URL: &str = " https://akailon-game-data-backend.onrender.com";
 
 pub async fn fetch_mcq_video_tasks(n: usize, _env: &Env) -> Result<Vec<McqVideoTask>> {
     let url = format!("{}/api/game/fetch-mcq-datapoints", BASE_URL); // <-- Replace this

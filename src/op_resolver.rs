@@ -354,11 +354,13 @@ impl UserData {
                                 let current_iq = self.progress.iq as isize;
                                 let new_iq = (current_iq + iq_change).max(0);
                                 self.progress.iq = new_iq as usize;
+                                
                             }
                         }
                     }
                 }
                 self.notifications.push(notification.clone());
+                calculate_product(self);
                 Response::ok(
                     json!({
                         "status": "Notification added to DO",
