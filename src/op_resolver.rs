@@ -570,7 +570,7 @@ impl UserData {
                 Response::ok(
                     json!({
                         "status": "MCQ answers submitted successfully",
-                        "daily_progress": &self.daily
+                        "daily": &self.daily
                     })
                     .to_string(),
                 )
@@ -632,7 +632,7 @@ impl UserData {
                 Response::ok(
                     json!({
                         "status": "Text answer submitted successfully",
-                        "daily_progress": &self.daily
+                        "daily": &self.daily
                     })
                     .to_string(),
                 )

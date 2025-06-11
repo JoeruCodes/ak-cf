@@ -14,8 +14,8 @@ bindings = [
 crons = ["*/10 * * * *"]
 
 [[migrations]]
-tag = "v2"
-new_sqlite_classes = [ "UserDataWrapper" ]
+tag = "v1"
+new_classes = [ "UserDataWrapper" ]
 
 [observability.logs]
 enabled = true
