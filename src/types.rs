@@ -221,17 +221,21 @@ impl Default for UserData {
             },
             game_state: GameState {
                 active_aliens: [0; 16],
-                inventory_aliens: 10,
-                power_ups: Vec::new(),
+                inventory_aliens: 30,
+                power_ups: vec![
+                    PowerUpKind::ColumnPowerUp,
+                    PowerUpKind::RowPowerUp,
+                    PowerUpKind::NearestSquarePowerUp
+                ],
                 king_lvl: 1,
                 total_merged_aliens: 0,
             },
             progress: Progress {
                 iq: 40,
-                social_score: 0,
+                social_score: 20,
                 all_task_done: false,
                 product: 0,
-                akai_balance: 0,
+                akai_balance: 95,
                 total_task_completed: 0,
                 streak: 0,
                 badges: Vec::new(),
@@ -260,7 +264,7 @@ impl Default for UserData {
             },
         };
 
-        for i in 0..5 {
+        for i in 0..10 {
             res.game_state.active_aliens[i] = 1;
         }
 
