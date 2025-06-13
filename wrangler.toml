@@ -1,9 +1,13 @@
 name = "cf_ws"
 main = "build/worker/shim.mjs"
-compatibility_date = "2024-12-20"
+compatibility_date = "2024-03-20"
 
 [build]
 command = "cargo install -q worker-build && worker-build --release"
+
+[[queues]]
+binding = "NOTIFICATION_QUEUE"
+queue = "notification-queue"
 
 [durable_objects]
 bindings = [
@@ -23,4 +27,4 @@ enabled = true
 [[d1_databases]]
 binding = "D1_DATABASE"
 database_name = "game-data"
-database_id = "a946c559-2b0c-43e9-9516-6a143881ab26"
+database_id = "249c88d3-d81c-48a3-b4de-d56c42214e4a"

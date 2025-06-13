@@ -18,6 +18,8 @@ mod sql;
 mod types;
 mod utils;
 
+
+
 #[durable_object]
 struct UserDataWrapper {
     state: State,
@@ -28,7 +30,11 @@ struct UserDataWrapper {
 #[durable_object]
 impl DurableObject for UserDataWrapper {
     fn new(state: State, env: Env) -> Self {
-        Self { state, env, user_id_for_session: None }
+        Self {
+            state,
+            env,
+            user_id_for_session: None,
+        }
     }
 
     async fn fetch(&mut self, mut req: Request) -> Result<Response> {

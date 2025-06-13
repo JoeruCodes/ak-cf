@@ -37,13 +37,8 @@ impl UserData {
                     return Response::error("Combined Alien IDs cannot be the same", 400);
                 }
                 self.game_state.active_aliens[*idx_a] += 1;
-                // Replace the second alien with (king_lvl-1)*10 + 1 if we have inventory
-                self.game_state.active_aliens[*idx_b] = if self.game_state.inventory_aliens > 0 {
-                    self.game_state.inventory_aliens -= 1;
-                    (self.game_state.king_lvl - 1) * 10 + 1
-                } else {
-                    0
-                };
+                // Simply set the second position to empty (0)
+                self.game_state.active_aliens[*idx_b] = 0;
                 self.game_state.total_merged_aliens += 1;
                 //daily task check
                 self.daily.daily_merge.0 += 1;
@@ -472,8 +467,8 @@ impl UserData {
                     .collect();
 
                 let level = self.progress.iq / 50 + 1;
-                let num_mcq_tasks = level * 4;
-                let num_text_tasks = level * 6;
+                let num_mcq_tasks = level * 3;
+                let num_text_tasks = level * 4;
 
                 let mcq_tasks = fetch_mcq_video_tasks(num_mcq_tasks, &env)
                     .await

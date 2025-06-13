@@ -72,6 +72,10 @@ pub async fn push_notification_to_user_do(
     message: &str,
     metadata: Option<HashMap<String, String>>,
 ) -> Result<()> {
+    console_log!(
+        "Attempting to push notification for user_id: {}",
+        user_id
+    );
     let do_ns = env.durable_object("USER_DATA_WRAPPER")?;
     let do_id = do_ns.id_from_name(user_id)?;
     let stub = do_id.get_stub()?;
@@ -101,9 +105,23 @@ pub async fn push_notification_to_user_do(
     
     let req = Request::new_with_init("https://do-internal/notification", &request_init)?;
     
-    stub.fetch_with_request(req).await?;
-
-    Ok(())
+    match stub.fetch_with_request(req).await {
+        Ok(_) => {
+            console_log!(
+                "Successfully pushed notification for user_id: {}",
+                user_id
+            );
+            Ok(())
+        }
+        Err(e) => {
+            console_error!(
+                "Error pushing notification for user_id: {}: {:?}",
+                user_id,
+                e
+            );
+            Err(e)
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -119,12 +137,27 @@ struct ConsensusData {
 }
 
 pub async fn notify_task_result(mut req: Request, env: &Env) -> Result<Response> {
+    console_log!("Received request for notify_task_result");
     let payload: ConsensusPayload = match req.json().await {
         Ok(p) => p,
-        Err(e) => return Response::error(format!("Invalid JSON payload: {}", e), 400),
+        Err(e) => {
+            console_error!("Failed to parse JSON payload: {}", e);
+            return Response::error(format!("Invalid JSON payload: {}", e), 400);
+        }
     };
 
+    console_log!(
+        "Processing consensus payload for {} users",
+        payload.data.len()
+    );
+
     for user_data in payload.data {
+        console_log!(
+            "Processing user_id: {}, task_type: {}, flagged: {}",
+            user_data.user_id,
+            user_data.task_type,
+            user_data.flagged
+        );
         let is_correct = !user_data.flagged;
         
         if let Some(config) = get_reward_config(&user_data.task_type) {
@@ -153,13 +186,21 @@ pub async fn notify_task_result(mut req: Request, env: &Env) -> Result<Response>
                 &message,
                 Some(metadata),
             ).await {
-                console_error!("Failed to push notification for user {}: {:?}", user_data.user_id, e);
+                console_error!(
+                    "Failed to push notification for user {}: {:?}",
+                    user_data.user_id,
+                    e
+                );
             }
         } else {
-            console_log!("No reward config found for task_type: {}", user_data.task_type);
+            console_log!(
+                "No reward config found for task_type: {}",
+                user_data.task_type
+            );
         }
     }
 
+    console_log!("Finished processing reward distribution.");
     Response::ok("Reward distribution processed.")
 }
 
