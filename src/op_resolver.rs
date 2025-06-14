@@ -65,8 +65,15 @@ impl UserData {
                 )
             }
             Op::MoveAlienFromInventoryToActive => {
+                // Find first empty slot in active_aliens
+                let empty_slot = match self.game_state.active_aliens.iter().position(|&alien| alien == 0) {
+                    Some(slot) => slot,
+                    None => return Response::error("No empty slots in active grid", 400),
+                };
+
+                // Check if we have aliens in inventory
                 if self.game_state.inventory_aliens == 0 {
-                    return Response::error("No aliens in inventory", 404);
+                    return Response::error("No aliens in inventory", 400);
                 }
 
                 if let Some(empty_slot) = self.game_state.active_aliens.iter().position(|a| *a == 0)
@@ -77,7 +84,7 @@ impl UserData {
                     // Calculate new alien level
                     let highest_alien = self.game_state.active_aliens.iter().max().unwrap_or(&0);
                     let king_level_div = self.game_state.king_lvl / 3;
-                    let new_alien_level = std::cmp::max(1, highest_alien - (6 + king_level_div));
+                    let new_alien_level = std::cmp::max(1, highest_alien.saturating_sub(6 + king_level_div));
 
                     // Place the new alien in the empty slot
                     self.game_state.active_aliens[empty_slot] = new_alien_level;
