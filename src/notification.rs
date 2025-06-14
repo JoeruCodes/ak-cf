@@ -28,6 +28,7 @@ pub enum NotificationType {
 pub enum Read {
     Yes,
     No,
+    Claim,
 }
 
 impl NotificationType {
@@ -45,6 +46,7 @@ impl Read {
         match self {
             Read::Yes => "Yes",
             Read::No => "No",
+            Read::Claim => "Claim",
         }
     }
 }

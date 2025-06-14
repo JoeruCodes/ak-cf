@@ -30,6 +30,7 @@ pub enum Op {
     UpdatePassword(String),
     AddNotificationInternal(Notification),
     MarkNotificationRead(String),
+    ProcessNotificationMetadata(String),
     UseReferralCode(String),
     GenerateDailyTasks,
     CheckDailyTask(Option<String>),

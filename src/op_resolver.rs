@@ -257,34 +257,18 @@ impl UserData {
             }
             
             Op::AddNotificationInternal(notification) => {
-                if notification.notification_type == NotificationType::Referral {
-                    self.social.players_referred += 1;
-                    self.progress.social_score += 10;
-                    self.progress.akai_balance += 50;
-                } else if notification.notification_type == NotificationType::Performance {
-                    if let Some(metadata) = &notification.metadata {
-                        if let Some(akai_str) = metadata.get("akai_balance") {
-                            if let Ok(akai) = akai_str.parse::<usize>() {
-                                self.progress.akai_balance += akai;
-                            }
-                        }
-
-                        if let Some(iq_str) = metadata.get("iq") {
-                            if let Ok(iq_change) = iq_str.parse::<isize>() {
-                                let current_iq = self.progress.iq as isize;
-                                let new_iq = (current_iq + iq_change).max(0);
-                                self.progress.iq = new_iq as usize;
-                                
-                            }
-                        }
-                    }
+                let mut notification = notification.clone();
+                // Set read status to Claim for Referral and Performance types
+                if notification.notification_type == NotificationType::Referral || 
+                   notification.notification_type == NotificationType::Performance {
+                    notification.read = Read::Claim;
                 }
+                // Simply add the notification
                 self.notifications.push(notification.clone());
-                calculate_product(self);
                 Response::ok(
                     json!({
-                        "status": "Notification added to DO",
-                        "players_referred": self.social.players_referred
+                        "status": "Notification added successfully",
+                        "notification": notification
                     })
                     .to_string(),
                 )
@@ -342,10 +326,12 @@ impl UserData {
                             console_error!("Failed to push referral notification: {:?}", e);
                             return Response::error("Internal error", 500);
                         }
+                        self.social.players_referred += 1;
                         Response::ok(
                             json!({
                                 "status": "Referral recorded",
-                                "referrer": referrer_user_id
+                                "referrer": referrer_user_id,
+                                "players_referred": self.social.players_referred
                             })
                             .to_string(),
                         )
@@ -527,6 +513,7 @@ impl UserData {
                     json!({
                         "status": "MCQ answers submitted successfully",
                         "daily": &self.daily,
+                        "power_ups": self.game_state.power_ups,
                         "reward": reward
                     })
                     .to_string(),
@@ -597,6 +584,7 @@ impl UserData {
                     json!({
                         "status": "Text answer submitted successfully",
                         "daily": &self.daily,
+                        "power_ups": self.game_state.power_ups,
                         "reward": reward
                     })
                     .to_string(),
@@ -611,6 +599,60 @@ impl UserData {
                 }
             }
             
+            Op::ProcessNotificationMetadata(notification_id) => {
+                // Find the notification
+                let notification_index = match self.notifications.iter().position(|n| n.notification_id == notification_id.clone()) {
+                    Some(index) => index,
+                    None => return Response::error("Notification not found", 404),
+                };
+
+                let notification = &mut self.notifications[notification_index];
+
+                match notification.notification_type {
+                    NotificationType::Referral => {
+                        self.progress.social_score += 10;
+                        self.progress.akai_balance += 50;
+                        notification.read = Read::No; // Change to No after processing
+                    },
+                    NotificationType::Performance => {
+                        if let Some(metadata) = &notification.metadata {
+                            // Handle Akai balance
+                            if let Some(akai_str) = metadata.get("akai_balance") {
+                                if let Ok(akai) = akai_str.parse::<usize>() {
+                                    self.progress.akai_balance += akai;
+                                }
+                            }
+
+                            // Handle IQ changes
+                            if let Some(iq_str) = metadata.get("iq") {
+                                if let Ok(iq_change) = iq_str.parse::<isize>() {
+                                    let current_iq = self.progress.iq as isize;
+                                    let new_iq = (current_iq + iq_change).max(0);
+                                    self.progress.iq = new_iq as usize;
+                                }
+                            }
+                        }
+                        notification.read = Read::No; // Change to No after processing
+                    },
+                    _ => {} // Other notification types don't need processing
+                }
+
+                // Recalculate product after any updates
+                calculate_product(self);
+
+                Response::ok(
+                    json!({
+                        "status": "Notification metadata processed successfully",
+                        "social_score": self.progress.social_score,
+                        "akai_balance": self.progress.akai_balance,
+                        "iq": self.progress.iq,
+                        "product": self.progress.product,
+                        "notifications": self.notifications
+                       
+                    })
+                    .to_string(),
+                )
+            }
         }
     }
 }
