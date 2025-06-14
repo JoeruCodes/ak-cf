@@ -3,8 +3,7 @@ use crate::gpt_voice::*;
 use crate::notification::{push_notification_to_user_do, NotificationType};
 use crate::types::DurableObjectAugmentedMsg;
 use crate::utils::{
-    fetch_mcq_video_tasks, fetch_text_video_tasks, find_user_id_by_referral_code,
-    give_daily_reward, BASE_URL,
+    fetch_mcq_video_tasks, fetch_text_video_tasks, find_user_id_by_referral_code, give_daily_reward, handle_user_login, BASE_URL
 };
 use crate::{daily_task::*, gpt_voice};
 use rand::Rng;
@@ -17,9 +16,8 @@ use worker::{console_error, console_log, D1Database, Date, Env, Response, Result
 
 use crate::{
     sql::insert_new_user,
-    types::{Op, PowerUpKind, UserData, WsMsg},
-    utils::calculate_king_alien_lvl,
-    utils::calculate_product,
+    types::{Op, PowerUpKind, UserData, WsMsg, Reward},
+    utils::{calculate_king_alien_lvl, calculate_product, handle_task_submission_rewards},
 };
 
 use crate::notification::Read;
@@ -37,46 +35,31 @@ impl UserData {
                     return Response::error("Combined Alien IDs cannot be the same", 400);
                 }
                 self.game_state.active_aliens[*idx_a] += 1;
-                // Simply set the second position to empty (0)
                 self.game_state.active_aliens[*idx_b] = 0;
                 self.game_state.total_merged_aliens += 1;
-                //daily task check
                 self.daily.daily_merge.0 += 1;
                 if (self.daily.daily_merge.0 == self.daily.daily_merge.1) {
                     self.daily.daily_merge.2 = true;
                     self.daily.total_completed += 1;
                     self.progress.social_score += 2;
                 }
-                calculate_king_alien_lvl(self);
+                let mut reward = Reward {
+                    is_reward: false,
+                    rewards: HashMap::new(),
+                };
+                calculate_king_alien_lvl(self, &mut reward);
                 Response::ok(
                     json!({
                         "active_aliens": self.game_state.active_aliens,
                         "inventory_aliens": self.game_state.inventory_aliens,
+                        "power_ups": self.game_state.power_ups,
                         "total_merged_aliens": self.game_state.total_merged_aliens,
                         "king_lvl": self.game_state.king_lvl,
                         "product": self.progress.product,
-                        "links": self.daily.links,
+                        "social_score": self.progress.social_score,
                         "daily_merge": self.daily.daily_merge,
-                        "daily_annotate": self.daily.daily_annotate,
-                        "daily_powerups": self.daily.daily_powerups,
                         "total_completed": self.daily.total_completed,
-                        "alien_earned": self.daily.alien_earned,
-                        "pu_earned": self.daily.pu_earned
-                    })
-                    .to_string(),
-                )
-            }
-            Op::SpawnAlien => {
-                // Always add to inventory
-                self.game_state.inventory_aliens += 1;
-
-                Response::ok(
-                    json!({
-                        "active_aliens": self.game_state.active_aliens,
-                        "inventory_aliens": self.game_state.inventory_aliens,
-                        "total_merged_aliens": self.game_state.total_merged_aliens,
-                        "king_lvl": self.game_state.king_lvl,
-                        "product": self.progress.product
+                        "reward": reward
                     })
                     .to_string(),
                 )
@@ -91,18 +74,18 @@ impl UserData {
                     // Decrease inventory count
                     self.game_state.inventory_aliens -= 1;
 
-                    // Place (king_lvl-1)*10 + 1 in the empty slot
-                    self.game_state.active_aliens[empty_slot] =
-                        (self.game_state.king_lvl - 1) * 10 + 1;
+                    // Calculate new alien level
+                    let highest_alien = self.game_state.active_aliens.iter().max().unwrap_or(&0);
+                    let king_level_div = self.game_state.king_lvl / 3;
+                    let new_alien_level = std::cmp::max(1, highest_alien - (6 + king_level_div));
 
-                    calculate_king_alien_lvl(self);
+                    // Place the new alien in the empty slot
+                    self.game_state.active_aliens[empty_slot] = new_alien_level;
 
                     Response::ok(
                         json!({
                             "active_aliens": self.game_state.active_aliens,
                             "inventory_aliens": self.game_state.inventory_aliens,
-                            "king_lvl": self.game_state.king_lvl,
-                            "product": self.progress.product,
                         })
                         .to_string(),
                     )
@@ -110,7 +93,33 @@ impl UserData {
                     Response::error("Active aliens grid is full!", 404)
                 }
             }
+            Op::DeleteAlienFromActive(idx) => {
+                let highest_alien = self.game_state.active_aliens.iter().max().unwrap_or(&0);
+                if self.game_state.active_aliens[*idx] == *highest_alien {
+                    return Response::error("Cannot delete highest level alien", 400);
+                }
+                self.game_state.active_aliens[*idx] = 0;
+                Response::ok(
+                    json!({
+                        "active_aliens": self.game_state.active_aliens,
+                    })
+                    .to_string(),
+                )
+            }
+            Op::MoveAlienInGrid(from, to) => {
+                if *from >= 16 || *to >= 16 {
+                    return Response::error("Invalid grid position", 400);
+                }
 
+                self.game_state.active_aliens.swap(*from, *to);
+
+                Response::ok(
+                    json!({
+                        "active_aliens": self.game_state.active_aliens
+                    })
+                    .to_string(),
+                )
+            }
             Op::SpawnPowerup(powerup) => {
                 self.game_state.power_ups.push(*powerup);
                 Response::ok(
@@ -124,9 +133,7 @@ impl UserData {
                 if *idx >= self.game_state.power_ups.len() || *target_pos >= 16 {
                     return Response::error("Invalid powerup index or target position", 400);
                 }
-
                 let power_up = self.game_state.power_ups.swap_remove(*idx);
-
                 match power_up {
                     PowerUpKind::ColumnPowerUp => {
                         let col = *target_pos % 4;
@@ -162,53 +169,32 @@ impl UserData {
                         }
                     }
                 }
-
-                calculate_king_alien_lvl(self);
+                let mut reward = Reward {
+                    is_reward: false,
+                    rewards: HashMap::new(),
+                };
+                calculate_king_alien_lvl(self, &mut reward);
                 self.daily.daily_powerups.0 += 1;
                 if (self.daily.daily_powerups.0 == self.daily.daily_powerups.1) {
                     self.daily.daily_powerups.2 = true;
                     self.daily.total_completed += 1;
                     self.progress.social_score += 2;
                 }
-
                 Response::ok(
                     json!({
                         "active_aliens": self.game_state.active_aliens,
                         "power_ups": self.game_state.power_ups,
                         "king_lvl": self.game_state.king_lvl,
                         "product" : self.progress.product,
-                        "links": self.daily.links,
-                        "daily_merge": self.daily.daily_merge,
-                        "daily_annotate": self.daily.daily_annotate,
                         "daily_powerups": self.daily.daily_powerups,
                         "total_completed": self.daily.total_completed,
-                        "alien_earned": self.daily.alien_earned,
-                        "pu_earned": self.daily.pu_earned
-                    })
-                    .to_string(),
-                )
-            }
-            Op::AwardBadge(badge) => {
-                self.progress.badges.push(badge.clone());
-                Response::ok(
-                    json!({
-                        "badges": self.progress.badges
+                        "reward": reward
                     })
                     .to_string(),
                 )
             }
             Op::GetData => {
-                let current_time = Date::now().as_millis() / 1000;
-                let time_since_last_login = current_time - self.profile.real_login;
-                let one_hour = 60 * 60;
-
-
-                if time_since_last_login >= one_hour {
-                    self.game_state.inventory_aliens += 20;
-                    self.profile.real_login = Date::now().as_millis() / 1000;
-                }
-            
-                
+                handle_user_login(self);
                 Response::from_json(&self)
             }
             Op::Register(password) => {
@@ -227,68 +213,11 @@ impl UserData {
                     }
                 }
             }
-
-            // Profile operations
             Op::UpdateEmail(email) => {
                 self.profile.email = Some(email.clone());
                 Response::ok(
                     json!({
                         "email": self.profile.email
-                    })
-                    .to_string(),
-                )
-            }
-            Op::UpdatePfp(pfp) => {
-                self.profile.pfp = pfp.clone();
-                Response::ok(
-                    json!({
-                        "pfp": self.profile.pfp
-                    })
-                    .to_string(),
-                )
-            }
-
-            // Progress operations
-            Op::UpdateIq(iq) => {
-                self.progress.iq = *iq;
-                calculate_product(self);
-                Response::ok(
-                    json!({
-                        "iq": self.progress.iq,
-                        "product" : self.progress.product
-                    })
-                    .to_string(),
-                )
-            }
-
-            Op::IncrementAkaiBalance => {
-                self.progress.akai_balance += 1;
-                Response::ok(
-                    json!({
-                        "akai_balance": self.progress.akai_balance
-                    })
-                    .to_string(),
-                )
-            }
-            Op::DecrementAkaiBalance => {
-                if self.progress.akai_balance > 0 {
-                    self.progress.akai_balance -= 1;
-                }
-                Response::ok(
-                    json!({
-                        "akai_balance": self.progress.akai_balance
-                    })
-                    .to_string(),
-                )
-            }
-
-            Op::DeleteAlienFromActive(idx) => {
-                self.game_state.active_aliens[*idx] = 0;
-                calculate_king_alien_lvl(self);
-                Response::ok(
-                    json!({
-                        "active_aliens": self.game_state.active_aliens,
-                        "king_lvl" : self.game_state.king_lvl,
                     })
                     .to_string(),
                 )
@@ -317,20 +246,16 @@ impl UserData {
                     .to_string(),
                 )
             }
-            Op::MoveAlienInGrid(from, to) => {
-                if *from >= 16 || *to >= 16 {
-                    return Response::error("Invalid grid position", 400);
-                }
-
-                self.game_state.active_aliens.swap(*from, *to);
-
+            Op::UpdatePfp(pfp) => {
+                self.profile.pfp = *pfp;
                 Response::ok(
                     json!({
-                        "active_aliens": self.game_state.active_aliens
+                        "pfp": self.profile.pfp
                     })
                     .to_string(),
                 )
             }
+            
             Op::AddNotificationInternal(notification) => {
                 if notification.notification_type == NotificationType::Referral {
                     self.social.players_referred += 1;
@@ -367,19 +292,24 @@ impl UserData {
             
             Op::MarkNotificationRead(notification_id) => {
                 let mut found = false;
+                let mut index_to_remove = None;
 
-                for notif in self.notifications.iter_mut() {
+                for (i, notif) in self.notifications.iter_mut().enumerate() {
                     if notif.notification_id == *notification_id {
                         notif.read = Read::Yes;
                         found = true;
+                        index_to_remove = Some(i);
                         break;
                     }
                 }
 
                 if found {
+                    if let Some(index) = index_to_remove {
+                        self.notifications.remove(index);
+                    }
                     Response::ok(
                         json!({
-                            "status": "marked as read",
+                            "status": "notification removed",
                             "notification_id": notification_id,
                             "notifications": self.notifications
                         })
@@ -426,26 +356,12 @@ impl UserData {
                         Response::error("Database error", 500)
                     }
                 }
-            }
-            
-            Op::UpdateDbFromDo => match crate::sql::update_user_data(self, d1).await {
-                Ok(_) => Response::ok(
-                    json!({
-                        "status": "Database successfully updated from DO"
-                    })
-                    .to_string(),
-                ),
-                Err(e) => {
-                    console_error!("Error updating DB from DO: {:?}", e);
-                    Response::error("Failed to update DB", 500)
-                }
-            },
-            
+            }          
             Op::GenerateDailyTasks => {
                 let now = worker::Date::now().as_millis();
-                let one_day_in_millis = 24 * 60 * 60 * 1000;
+                let four_hrs_in_millis = 4 * 60 * 60 * 1000;
 
-                if now - self.daily.last_task_generation < one_day_in_millis {
+                if now - self.daily.last_task_generation < four_hrs_in_millis {
                     return Response::error(
                         json!({"error": "A new set of tasks is not available yet."}).to_string(),
                         429, 
@@ -453,8 +369,6 @@ impl UserData {
                 }
                 
                 self.daily.last_task_generation = now;
-                
-                console_log!("100");
 
                 let mut rng = rand::thread_rng();
                 let random_links = get_random_links(2)
@@ -494,6 +408,46 @@ impl UserData {
                 Response::from_json(&self.daily)
             }
 
+            Op::CheckDailyTask(maybe_url) => {
+                let mut matched = false;
+
+                if let Some(url) = maybe_url {
+                    for link in &mut self.daily.links {
+                        if link.url == *url && !link.visited {
+                            link.visited = true;
+                            self.progress.social_score += 2;
+                            matched = true;
+                            break; // Exit loop once matched and updated
+                        }
+                    }
+
+                    if matched {
+                        self.daily.total_completed += 1;
+                    }
+                }
+                Response::ok(
+                    json!({
+                        "daily": self.daily,
+                        "social_score": self.progress.social_score
+                    })
+                    .to_string(),
+                )
+            }
+            Op::ClaimDailyReward(index) => {
+                give_daily_reward(self, *index);
+                Response::ok(
+                    json!({
+                        "active_aliens": self.game_state.active_aliens,
+                        "king_lvl": self.game_state.king_lvl,
+                        "product": self.progress.product,
+                        "alien_earned": self.daily.alien_earned,
+                        "pu_earned": self.daily.pu_earned,
+                        "power_ups": self.game_state.power_ups
+                    })
+                    .to_string(),
+                )
+            }
+
             Op::SubmitMcqAnswers(datapoint_id, answers) => {
                 if answers.len() != 5 {
                     return Response::error(json!({"error": "Exactly 5 answers are required."}).to_string(), 400);
@@ -503,14 +457,14 @@ impl UserData {
                     .daily
                     .mcq_video_tasks
                     .iter()
-                    .position(|task| task.id == datapoint_id.clone())
+                    .position(|task| task.id == *datapoint_id)
                 {
                     Some(index) => index,
-                    None => return Response::error(json!({"error": "Task not found"}).to_string(), 404),
+                    None => return Response::error("Task not found", 404),
                 };
 
                 if self.daily.mcq_video_tasks[task_index].visited {
-                    return Response::error(json!({"error": "Task already completed"}).to_string(), 400);
+                    return Response::error("Task already completed", 400);
                 }
 
                 let questions = &self.daily.mcq_video_tasks[task_index].preLabel.questions;
@@ -562,10 +516,18 @@ impl UserData {
 
                 calculate_product(self);
 
+                // Handle rewards for MCQ submission
+                let mut reward = Reward {
+                    is_reward: false,
+                    rewards: HashMap::new(),
+                };
+                handle_task_submission_rewards(self, &mut reward, 5, 10);
+
                 Response::ok(
                     json!({
                         "status": "MCQ answers submitted successfully",
-                        "daily": &self.daily
+                        "daily": &self.daily,
+                        "reward": reward
                     })
                     .to_string(),
                 )
@@ -624,50 +586,23 @@ impl UserData {
 
                 calculate_product(self);
 
+                // Handle rewards for text submission
+                let mut reward = Reward {
+                    is_reward: false,
+                    rewards: HashMap::new(),
+                };
+                handle_task_submission_rewards(self, &mut reward, 10, 20);
+
                 Response::ok(
                     json!({
                         "status": "Text answer submitted successfully",
-                        "daily": &self.daily
+                        "daily": &self.daily,
+                        "reward": reward
                     })
                     .to_string(),
                 )
             }
 
-            Op::CheckDailyTask(maybe_url) => {
-                let mut matched = false;
-
-                if let Some(url) = maybe_url {
-                    for link in &mut self.daily.links {
-                        if link.url == *url && !link.visited {
-                            link.visited = true;
-                            self.progress.social_score += 2;
-                            matched = true;
-                            break; // Exit loop once matched and updated
-                        }
-                    }
-
-                    if matched {
-                        self.daily.total_completed += 1;
-                    }
-                }
-                Response::from_json(&self.daily)
-            }
-
-            Op::ClaimDailyReward(index) => {
-                give_daily_reward(self, *index);
-                Response::ok(
-                    json!({
-                        "active_aliens": self.game_state.active_aliens,
-                        "king_lvl": self.game_state.king_lvl,
-                        "product": self.progress.product,
-                        "alien_earned": self.daily.alien_earned,
-                        "pu_earned": self.daily.pu_earned,
-                        "power_ups": self.game_state.power_ups
-                    })
-                    .to_string(),
-                )
-            }
-            
             Op::SyncData => match crate::sql::update_user_data(self, d1).await {
                 Ok(_) => Response::ok("Data synced successfully"),
                 Err(e) => {

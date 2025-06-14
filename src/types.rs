@@ -17,26 +17,20 @@ use crate::{
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum Op {
     CombineAlien(usize, usize),
-    SpawnAlien,
+    MoveAlienFromInventoryToActive,
     DeleteAlienFromActive(usize),
+    MoveAlienInGrid(usize, usize),
+    SpawnPowerup(PowerUpKind), //should remove after testing
     UsePowerup(usize, usize), //changed
-    SpawnPowerup(PowerUpKind),
     GetData,
     Register(String),
-    AwardBadge(BadgesKind),
     UpdateEmail(String),
-    UpdatePfp(usize),
-    UpdateIq(usize),
-    IncrementAkaiBalance,
-    DecrementAkaiBalance,
-    MoveAlienFromInventoryToActive,
+    UpdatePfp(usize),   
     UpdateUserName(Option<String>),
     UpdatePassword(String),
-    MoveAlienInGrid(usize, usize),
     AddNotificationInternal(Notification),
     MarkNotificationRead(String),
     UseReferralCode(String),
-    UpdateDbFromDo,
     GenerateDailyTasks,
     CheckDailyTask(Option<String>),
     ClaimDailyReward(usize),
@@ -300,5 +294,11 @@ impl UserData {
         }
 
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Reward {
+    pub is_reward : bool,
+    pub rewards: HashMap<String, String>,
 }
 

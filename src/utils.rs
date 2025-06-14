@@ -1,13 +1,14 @@
+use std::usize::MAX;
+
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use rand::Rng;
 use serde_json::{json, Value};
 use worker::D1Database;
 use worker::*;
 
 use crate::{
-    sql,
-    types::{BadgesKind, GameState, LeagueType, McqPreLabel, McqVideoTask, PowerUpKind, Question, TextVideoTask, UserData},
-    notification::{Notification, NotificationType},
+    notification::{Notification, NotificationType}, sql, types::{BadgesKind, GameState, LeagueType, McqPreLabel, McqVideoTask, PowerUpKind, Question, Reward, TextVideoTask, UserData}
 };
 
 // Helper function to convert power_ups to JSON for SQLite
@@ -80,104 +81,58 @@ pub fn calculate_product(user_data: &mut UserData) {
     user_data.league = LeagueType::from_product(user_data.progress.product);
 }
 
-pub fn calculate_king_alien_lvl(user_data: &mut UserData) {
-    // Calculate new level: (sum of active aliens / 50) + 1
-    let sum: usize = user_data.game_state.active_aliens.iter().sum();
-    let new_lvl = (sum / 50) + 1;
+pub fn calculate_king_alien_lvl(user_data: &mut UserData, reward: &mut Reward) {
+    // Calculate new level: (highest alien level / 10) + 1
+    let highest_alien = user_data.game_state.active_aliens.iter().max().unwrap_or(&0);
+    let new_lvl = (highest_alien / 10) + 1;
 
-    // Only update if new level is higher than current level
     if new_lvl > user_data.game_state.king_lvl {
+
+        // Set reward flag to true
+        reward.is_reward = true;
         user_data.game_state.king_lvl = new_lvl;
 
         // Add 50 to akai
         user_data.progress.akai_balance += 50;
+        reward.rewards.insert("akai_balance".to_string(), "50".to_string());
 
-        // Add 5 aliens (lvl - 3)
-        for _ in 0..5 {
-            let earned_alien = new_lvl * 10 - 3;
-
-            let mut first_empty_index: Option<usize> = None;
-            let mut min_value = usize::MAX;
-            let mut min_index: usize = 0;
-
-            for (i, &val) in user_data.game_state.active_aliens.iter().enumerate() {
-                if val == 0 && first_empty_index.is_none() {
-                    first_empty_index = Some(i);
-                    break;
-                }
-
-                if val < min_value {
-                    min_value = val;
-                    min_index = i;
-                }
-            }
-
-            let target_index = first_empty_index.unwrap_or(min_index);
-            user_data.game_state.active_aliens[target_index] = earned_alien;
+        // Calculate reward alien level: max(1, highest_alien - 3)
+        let reward_alien_level = std::cmp::max(1, highest_alien.saturating_sub(3));
+        // Add 3 aliens using add_alien_reward_to_grid
+        for _ in 0..3 {
+            add_alien_reward_to_grid(user_data, reward_alien_level);
+            reward.rewards.insert("alien".to_string(), format!("{}", reward_alien_level));
         }
 
-        // Add a random power up
-        let powerups = [
-            PowerUpKind::RowPowerUp,
-            PowerUpKind::ColumnPowerUp,
-            PowerUpKind::NearestSquarePowerUp,
-        ];
-
-        let mut rng = thread_rng();
-        let random_pu = *powerups.choose(&mut rng).unwrap();
-        user_data.game_state.power_ups.push(random_pu);
-
-        calculate_product(user_data); // 🧠 Update product only if level increased
+        // Add random powerup using give_random_power_up
+        let powerup = give_random_power_up(user_data);
+        // Add rewards to the hashmap with actual value
+        reward.rewards.insert("powerup".to_string(), format!("{:?}", powerup));
+        calculate_product(user_data);
     }
 }
 
 pub fn give_daily_reward(user_data: &mut UserData, index: usize) {
     if user_data.daily.total_completed >= 3 && user_data.daily.alien_earned.is_none() && index == 3
     {
-        let earned_alien = user_data.game_state.king_lvl * 10 - 3;
+        let highest_alien = user_data.game_state.active_aliens.iter().max().unwrap_or(&0);
+        let earned_alien = std::cmp::max(1, highest_alien - 3);
         user_data.daily.alien_earned = Some(earned_alien);
-
-        let mut first_empty_index: Option<usize> = None;
-        let mut min_value = usize::MAX;
-        let mut min_index: usize = 0;
-
-        for (i, &val) in user_data.game_state.active_aliens.iter().enumerate() {
-            if val == 0 && first_empty_index.is_none() {
-                first_empty_index = Some(i);
-                break;
-            }
-
-            if val < min_value {
-                min_value = val;
-                min_index = i;
-            }
-        }
-
-        let target_index = first_empty_index.unwrap_or(min_index);
-        user_data.game_state.active_aliens[target_index] = earned_alien;
-        calculate_king_alien_lvl(user_data);
+        add_alien_reward_to_grid(user_data, earned_alien);
     }
 
     if user_data.daily.total_completed >= 5 && user_data.daily.pu_earned.is_none() && index == 5 {
-        let powerups = [
-            PowerUpKind::RowPowerUp,
-            PowerUpKind::ColumnPowerUp,
-            PowerUpKind::NearestSquarePowerUp,
-        ];
-
-        let mut rng = thread_rng();
-        let random_pu = *powerups.choose(&mut rng).unwrap();
-
+        let random_pu = give_random_power_up(user_data);
         user_data.daily.pu_earned = Some(random_pu);
-        user_data.game_state.power_ups.push(random_pu);
     }
 }
 
-pub const BASE_URL: &str = "http://localhost:3001";
+pub const BASE_URL: &str = "https://akailon-game-data-backend.onrender.com";
 
 pub async fn fetch_mcq_video_tasks(n: usize, _env: &Env) -> Result<Vec<McqVideoTask>> {
     let url = format!("{}/api/game/fetch-mcq-datapoints", BASE_URL); // <-- Replace this
     let payload = serde_json::json!({ "numberOfDatapoints": n }).to_string();
+    console_log!("{}" , 100);
     let req = Request::new_with_init(
         &url,
         &RequestInit {
@@ -315,18 +270,83 @@ pub async fn fetch_text_video_tasks(
     Ok(Vec::new())
 }
 
-#[derive(serde::Deserialize)]
-struct UserIdRow {
-    user_id: String,
-}
-
 pub async fn find_user_id_by_referral_code(d1: &D1Database, code: &str) -> Result<Option<String>> {
     let stmt = d1.prepare("SELECT user_id FROM social_data WHERE referal_code = ?");
-    let res = stmt.bind(&[code.into()])?.first::<UserIdRow>(None).await;
+    let res = stmt.bind(&[code.into()])?.first::<String>(None).await;
 
     match res {
-        Ok(Some(row)) => Ok(Some(row.user_id)),
+        Ok(Some(user_id)) => Ok(Some(user_id)),
         Ok(None) => Ok(None),
         Err(e) => Err(e),
     }
-} 
+}
+
+pub fn handle_user_login(user_data: &mut UserData) {
+    let current_time = Date::now().as_millis() / 1000;
+    let time_since_last_login = current_time - user_data.profile.real_login;
+    let one_hour = 60 * 60;
+
+    //distribute 30 inv aliens if more than 1 hr
+    if time_since_last_login >= one_hour {
+        user_data.game_state.inventory_aliens += 30;
+        user_data.profile.real_login = current_time;
+    }
+}
+
+pub fn give_random_power_up(user_data: &mut UserData)  -> PowerUpKind {
+    let powerups = [
+        PowerUpKind::RowPowerUp,
+        PowerUpKind::ColumnPowerUp,
+        PowerUpKind::NearestSquarePowerUp,
+    ];
+
+    let mut rng = thread_rng();
+    let random_pu = *powerups.choose(&mut rng).unwrap();
+    user_data.game_state.power_ups.push(random_pu);
+    random_pu
+}
+
+pub fn add_alien_reward_to_grid(user_data: &mut UserData, alien_level: usize) {
+    let mut first_empty_index: Option<usize> = None;
+    let mut min_value = usize::MAX;
+    let mut min_index: usize = 0;
+
+    for (i, &val) in user_data.game_state.active_aliens.iter().enumerate() {
+        if val == 0 && first_empty_index.is_none() {
+            first_empty_index = Some(i);
+            break;
+        }
+
+        if val < min_value {
+            min_value = val;
+            min_index = i;
+        }
+    }
+
+    let target_index = first_empty_index.unwrap_or(min_index);
+    user_data.game_state.active_aliens[target_index] = alien_level;
+}
+
+pub fn handle_task_submission_rewards(user_data: &mut UserData, reward: &mut Reward, iq_reward: usize, akai_reward: usize) {
+    // Set reward flag
+    reward.is_reward = true;
+
+    // Add IQ reward
+    user_data.progress.iq += iq_reward;
+    reward.rewards.insert("iq".to_string(), iq_reward.to_string());
+
+    // Add Akai reward
+    user_data.progress.akai_balance += akai_reward;
+    reward.rewards.insert("akai_balance".to_string(), akai_reward.to_string());
+
+    // Randomly decide to give powerup (30% chance)
+    let mut rng = thread_rng();
+    if rng.gen_bool(0.3) {
+        let powerup = give_random_power_up(user_data);
+        reward.rewards.insert("powerup".to_string(), format!("{:?}", powerup));
+    }
+
+    // Recalculate product after rewards
+    calculate_product(user_data);
+}
+
