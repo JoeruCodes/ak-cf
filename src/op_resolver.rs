@@ -65,11 +65,6 @@ impl UserData {
                 )
             }
             Op::MoveAlienFromInventoryToActive => {
-                // Find first empty slot in active_aliens
-                let empty_slot = match self.game_state.active_aliens.iter().position(|&alien| alien == 0) {
-                    Some(slot) => slot,
-                    None => return Response::error("No empty slots in active grid", 400),
-                };
 
                 // Check if we have aliens in inventory
                 if self.game_state.inventory_aliens == 0 {
@@ -315,12 +310,23 @@ impl UserData {
                 let env = env.clone();
 
                 match find_user_id_by_referral_code(&d1, code).await {
-                    Ok(Some(referrer_user_id)) => {
+                    Ok(Some(user_id_obj)) => {
+                        let referrer_user_id = match user_id_obj.get("user_id") {
+                            Some(user_id) => user_id.as_str().unwrap_or_default().to_string(),
+                            None => return Response::error("Invalid user data in database", 500),
+                        };
+
+                        // Check if user is trying to use their own referral code
+                        if referrer_user_id == self.profile.user_id {
+                            return Response::error("Cannot use your own referral code", 400);
+                        }
+
                         let message = "Your referral code was used!";
                         let mut metadata = HashMap::new();
                         metadata.insert("used_by".to_string(), op_request.user_id.clone());
                         metadata.insert("social_score".to_string(), "10".to_string());
                         metadata.insert("akai_balance".to_string(), "25".to_string());
+
                         if let Err(e) = push_notification_to_user_do(
                             &env,
                             &referrer_user_id,
@@ -333,7 +339,9 @@ impl UserData {
                             console_error!("Failed to push referral notification: {:?}", e);
                             return Response::error("Internal error", 500);
                         }
+
                         self.social.players_referred += 1;
+
                         Response::ok(
                             json!({
                                 "status": "Referral recorded",
@@ -391,9 +399,9 @@ impl UserData {
                 self.daily.links = random_links;
                 self.daily.mcq_video_tasks = mcq_tasks;
                 self.daily.text_video_tasks = text_tasks;
-                self.daily.daily_merge = (0, rng.gen_range(2..=4), false);
-                self.daily.daily_annotate = (0, rng.gen_range(3..=7), false);
-                self.daily.daily_powerups = (0, rng.gen_range(2..=6), false);
+                self.daily.daily_merge = (0, rng.gen_range(5..=15), false);
+                self.daily.daily_annotate = (0, rng.gen_range(3..=5), false);
+                self.daily.daily_powerups = (0, rng.gen_range(1..=4), false);
                 self.daily.alien_earned = None;
                 self.daily.pu_earned = None;
                 self.daily.total_completed = 0;
@@ -656,6 +664,16 @@ impl UserData {
                         "product": self.progress.product,
                         "notifications": self.notifications
                        
+                    })
+                    .to_string(),
+                )
+            }
+
+            Op::PingPong => {
+                Response::ok(
+                    json!({
+                        "status": "pong",
+                        "timestamp": Date::now().as_millis()
                     })
                     .to_string(),
                 )

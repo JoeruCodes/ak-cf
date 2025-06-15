@@ -38,6 +38,7 @@ pub enum Op {
     SyncData,
     SubmitMcqAnswers(String, Vec<String>), // (datapoint_id, answers)
     SubmitTextAnswer(String, usize, String), // (datapoint_id, idx, text)
+    PingPong, // New operation for WebSocket ping/pong
 }
 
 #[derive(Serialize, Deserialize, Debug)]

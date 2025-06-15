@@ -270,12 +270,12 @@ pub async fn fetch_text_video_tasks(
     Ok(Vec::new())
 }
 
-pub async fn find_user_id_by_referral_code(d1: &D1Database, code: &str) -> Result<Option<String>> {
+pub async fn find_user_id_by_referral_code(d1: &D1Database, code: &str) -> Result<Option<serde_json::Value>> {
     let stmt = d1.prepare("SELECT user_id FROM social_data WHERE referal_code = ?");
-    let res = stmt.bind(&[code.into()])?.first::<String>(None).await;
+    let res = stmt.bind(&[code.into()])?.first::<serde_json::Value>(None).await;
 
     match res {
-        Ok(Some(user_id)) => Ok(Some(user_id)),
+        Ok(Some(user_id_obj)) => Ok(Some(user_id_obj)),
         Ok(None) => Ok(None),
         Err(e) => Err(e),
     }
