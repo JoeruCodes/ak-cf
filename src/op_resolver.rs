@@ -55,6 +55,7 @@ impl UserData {
                         "power_ups": self.game_state.power_ups,
                         "total_merged_aliens": self.game_state.total_merged_aliens,
                         "king_lvl": self.game_state.king_lvl,
+                        "akai_balance": self.progress.akai_balance,
                         "product": self.progress.product,
                         "social_score": self.progress.social_score,
                         "daily_merge": self.daily.daily_merge,
@@ -187,6 +188,7 @@ impl UserData {
                         "active_aliens": self.game_state.active_aliens,
                         "power_ups": self.game_state.power_ups,
                         "king_lvl": self.game_state.king_lvl,
+                        "akai_balance": self.progress.akai_balance,
                         "product" : self.progress.product,
                         "daily_powerups": self.daily.daily_powerups,
                         "total_completed": self.daily.total_completed,
@@ -529,7 +531,9 @@ impl UserData {
                         "status": "MCQ answers submitted successfully",
                         "daily": &self.daily,
                         "power_ups": self.game_state.power_ups,
-                        "reward": reward
+                        "reward": reward,
+                        "iq": self.progress.iq,
+                        "akai_balance": self.progress.akai_balance
                     })
                     .to_string(),
                 )
@@ -600,7 +604,9 @@ impl UserData {
                         "status": "Text answer submitted successfully",
                         "daily": &self.daily,
                         "power_ups": self.game_state.power_ups,
-                        "reward": reward
+                        "reward": reward,
+                        "iq": self.progress.iq,
+                        "akai_balance": self.progress.akai_balance
                     })
                     .to_string(),
                 )
