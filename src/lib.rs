@@ -10,6 +10,7 @@ use worker::*;
 mod auth;
 mod daily_task;
 mod gpt_voice;
+mod hints;
 mod leaderboard;
 mod notification;
 mod op_resolver;
@@ -407,7 +408,15 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
     let path = url.path();
 
     console_log!("Path: {:?}", path);
-    if path == "/api/leaderboard" {
+    if path == "/api/hint" {
+        if req.method() != Method::Get {
+            return Response::error("Method Not Allowed", 405);
+        }
+        let hint = hints::get_random_hint();
+        return Response::from_json(&serde_json::json!({
+            "hint": hint
+        }));
+    } else if path == "/api/leaderboard" {
         if auth::authenticate_user(&req, &env).await?.is_none() {
             return Response::error("Unauthorized", 401);
         }

@@ -281,7 +281,7 @@ pub async fn find_user_id_by_referral_code(d1: &D1Database, code: &str) -> Resul
     }
 }
 
-pub fn handle_user_login(user_data: &mut UserData) {
+pub fn handle_user_login(user_data: &mut UserData, reward: Option<&mut Reward>) {
     let current_time = Date::now().as_millis() / 1000;
     let time_since_last_login = current_time - user_data.profile.real_login;
     let one_hour = 60 * 60;
@@ -290,6 +290,11 @@ pub fn handle_user_login(user_data: &mut UserData) {
     if time_since_last_login >= one_hour {
         user_data.game_state.inventory_aliens += 30;
         user_data.profile.real_login = current_time;
+        
+        // Add to reward struct if provided
+        if let Some(reward) = reward {
+            reward.rewards.insert("inventory_aliens".to_string(), "30".to_string());
+        }
     }
 }
 

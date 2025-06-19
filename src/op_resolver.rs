@@ -198,8 +198,8 @@ impl UserData {
                 )
             }
             Op::GetData => {
-                let daily_reward = self.calculate_last_login();
-                handle_user_login(self);
+                let mut daily_reward = self.calculate_last_login();
+                handle_user_login(self, daily_reward.as_mut());
                 
                 let mut response = json!({
                     "user_data": self
@@ -372,9 +372,9 @@ impl UserData {
             }          
             Op::GenerateDailyTasks => {
                 let now = worker::Date::now().as_millis();
-                let four_hrs_in_millis = 4 * 60 * 60 * 1000;
+                let twelve_hrs_in_millis = 12 * 60 * 60 * 1000;
 
-                if now - self.daily.last_task_generation < four_hrs_in_millis {
+                if now - self.daily.last_task_generation < twelve_hrs_in_millis {
                     return Response::error(
                         json!({"error": "A new set of tasks is not available yet."}).to_string(),
                         429, 
