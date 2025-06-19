@@ -279,7 +279,7 @@ impl Default for UserData {
 }
 
 impl UserData {
-    pub fn calculate_last_login(&mut self) {
+    pub fn calculate_last_login(&mut self) -> Option<Reward> {
         // Streak Calculation Logic
         console_log!("calculating streak");
         let current_time = Date::now().as_millis() / 1000;
@@ -290,11 +290,37 @@ impl UserData {
         if time_since_last_login > one_day && time_since_last_login < two_days {
             self.progress.streak += 1;
             self.profile.last_login = current_time;
+            Some(self.get_daily_login_rewards())
         } else if time_since_last_login >= two_days {
             self.progress.streak = 0;
             self.profile.last_login = current_time;
+            Some(self.get_daily_login_rewards())
+        } else {
+            None
         }
+    }
 
+    pub fn get_daily_login_rewards(&mut self) -> Reward {
+        // Give daily login rewards
+        self.progress.akai_balance += 20;
+        
+        // Give 2 random power-ups
+        let powerup1 = crate::utils::give_random_power_up(self);
+        let powerup2 = crate::utils::give_random_power_up(self);
+        
+        let mut reward = Reward {
+            is_reward: true,
+            rewards: HashMap::new(),
+        };
+        reward.rewards.insert("akai_balance".to_string(), "20".to_string());
+        reward.rewards.insert("powerup1".to_string(), format!("{:?}", powerup1));
+        reward.rewards.insert("powerup2".to_string(), format!("{:?}", powerup2));
+        if self.progress.streak > 0 {
+            reward.rewards.insert("streak".to_string(), self.progress.streak.to_string());
+        }
+        
+        console_log!("Daily login rewards:  +20 Akai,  +2 powerups, streak: {}", self.progress.streak);
+        reward
     }
 }
 

@@ -198,8 +198,18 @@ impl UserData {
                 )
             }
             Op::GetData => {
+                let daily_reward = self.calculate_last_login();
                 handle_user_login(self);
-                Response::from_json(&self)
+                
+                let mut response = json!({
+                    "user_data": self
+                });
+                
+                if let Some(reward) = daily_reward {
+                    response["reward"] = json!(reward);
+                }
+                
+                Response::from_json(&response)
             }
             Op::Register(password) => {
                 console_log!("Creating tables if not exists");
