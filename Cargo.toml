@@ -31,5 +31,5 @@ hex = "0.4.3"
 reqwest = { version = "0.12.16", features = ["multipart", "json"], default-features = false }
 js-sys = "0.3.69"
 web-sys = { version = "0.3.69", features = ["Blob", "BlobPropertyBag", "File", "FormData"] }
-alloy = {version="1.0.12" ,default-features=false}
-getrandom = { version = "0.3.2", features = ["wasm_js"] }
+alloy = {version="1.0.12" , features=["network", "providers", "signer-local", "sol-types", "contract", "rpc-types"], default-features=false}
+getrandom = { version = "0.2", features = ["js"] }

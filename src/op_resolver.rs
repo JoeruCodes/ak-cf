@@ -3,9 +3,10 @@ use crate::gpt_voice::*;
 use crate::notification::{push_notification_to_user_do, NotificationType};
 use crate::types::DurableObjectAugmentedMsg;
 use crate::utils::{
-    fetch_mcq_video_tasks, fetch_text_video_tasks, find_user_id_by_referral_code, give_daily_reward, handle_user_login, BASE_URL
+    fetch_mcq_video_tasks, fetch_text_video_tasks, find_user_id_by_referral_code,
+    give_daily_reward, handle_user_login, BASE_URL,
 };
-use crate::{daily_task::*, gpt_voice, crypto::*};
+use crate::{crypto::*, daily_task::*, gpt_voice};
 use rand::Rng;
 use serde_json::json;
 use sha2::digest::Update;
@@ -16,7 +17,7 @@ use worker::{console_error, console_log, D1Database, Date, Env, Response, Result
 
 use crate::{
     sql::insert_new_user,
-    types::{Op, PowerUpKind, UserData, WsMsg, Reward, ExchangeRequest},
+    types::{ExchangeRequest, Op, PowerUpKind, Reward, UserData, WsMsg},
     utils::{calculate_king_alien_lvl, calculate_product, handle_task_submission_rewards},
 };
 
@@ -66,7 +67,6 @@ impl UserData {
                 )
             }
             Op::MoveAlienFromInventoryToActive => {
-
                 // Check if we have aliens in inventory
                 if self.game_state.inventory_aliens == 0 {
                     return Response::error("No aliens in inventory", 400);
@@ -80,7 +80,8 @@ impl UserData {
                     // Calculate new alien level
                     let highest_alien = self.game_state.active_aliens.iter().max().unwrap_or(&0);
                     let king_level_div = self.game_state.king_lvl / 3;
-                    let new_alien_level = std::cmp::max(1, highest_alien.saturating_sub(6 + king_level_div));
+                    let new_alien_level =
+                        std::cmp::max(1, highest_alien.saturating_sub(6 + king_level_div));
 
                     // Place the new alien in the empty slot
                     self.game_state.active_aliens[empty_slot] = new_alien_level;
@@ -200,15 +201,15 @@ impl UserData {
             Op::GetData => {
                 let mut daily_reward = self.calculate_last_login();
                 handle_user_login(self, daily_reward.as_mut());
-                
+
                 let mut response = json!({
                     "user_data": self
                 });
-                
+
                 if let Some(reward) = daily_reward {
                     response["reward"] = json!(reward);
                 }
-                
+
                 Response::from_json(&response)
             }
             Op::Register(password) => {
@@ -269,12 +270,13 @@ impl UserData {
                     .to_string(),
                 )
             }
-            
+
             Op::AddNotificationInternal(notification) => {
                 let mut notification = notification.clone();
                 // Set read status to Claim for Referral and Performance types
-                if notification.notification_type == NotificationType::Referral || 
-                   notification.notification_type == NotificationType::Performance {
+                if notification.notification_type == NotificationType::Referral
+                    || notification.notification_type == NotificationType::Performance
+                {
                     notification.read = Read::Claim;
                 }
                 // Simply add the notification
@@ -287,7 +289,7 @@ impl UserData {
                     .to_string(),
                 )
             }
-            
+
             Op::MarkNotificationRead(notification_id) => {
                 let mut found = false;
                 let mut index_to_remove = None;
@@ -317,7 +319,7 @@ impl UserData {
                     Response::error("Notification not found", 404)
                 }
             }
-            
+
             Op::UseReferralCode(code) => {
                 let env = env.clone();
 
@@ -369,7 +371,7 @@ impl UserData {
                         Response::error("Database error", 500)
                     }
                 }
-            }          
+            }
             Op::GenerateDailyTasks => {
                 let now = worker::Date::now().as_millis();
                 let twelve_hrs_in_millis = 12 * 60 * 60 * 1000;
@@ -377,10 +379,10 @@ impl UserData {
                 if now - self.daily.last_task_generation < twelve_hrs_in_millis {
                     return Response::error(
                         json!({"error": "A new set of tasks is not available yet."}).to_string(),
-                        429, 
+                        429,
                     );
                 }
-                
+
                 self.daily.last_task_generation = now;
 
                 let mut rng = rand::thread_rng();
@@ -463,7 +465,10 @@ impl UserData {
 
             Op::SubmitMcqAnswers(datapoint_id, answers) => {
                 if answers.len() != 5 {
-                    return Response::error(json!({"error": "Exactly 5 answers are required."}).to_string(), 400);
+                    return Response::error(
+                        json!({"error": "Exactly 5 answers are required."}).to_string(),
+                        400,
+                    );
                 }
 
                 let task_index = match self
@@ -482,7 +487,10 @@ impl UserData {
 
                 let questions = &self.daily.mcq_video_tasks[task_index].preLabel.questions;
                 if questions.len() != 5 {
-                    return Response::error(json!({"error": "Task data is invalid."}).to_string(), 500);
+                    return Response::error(
+                        json!({"error": "Task data is invalid."}).to_string(),
+                        500,
+                    );
                 }
 
                 // Map answers to questions for the backend payload
@@ -515,7 +523,10 @@ impl UserData {
 
                 let res = Fetch::Request(req).send().await?;
                 if !res.status_code() == 200 {
-                    return Response::error(json!({"error": "Failed to submit answers to backend"}).to_string(), 500);
+                    return Response::error(
+                        json!({"error": "Failed to submit answers to backend"}).to_string(),
+                        500,
+                    );
                 }
 
                 // Update local state after successful submission
@@ -550,18 +561,20 @@ impl UserData {
             }
 
             Op::SubmitTextAnswer(datapoint_id, idx, text) => {
-                let task_index = match self
-                    .daily
-                    .text_video_tasks
-                    .iter()
-                    .position(|task| task.datapointId == datapoint_id.clone() && task.questionIndex == idx.clone())
-                {
+                let task_index = match self.daily.text_video_tasks.iter().position(|task| {
+                    task.datapointId == datapoint_id.clone() && task.questionIndex == idx.clone()
+                }) {
                     Some(index) => index,
-                    None => return Response::error(json!({"error": "Task not found"}).to_string(), 404),
+                    None => {
+                        return Response::error(json!({"error": "Task not found"}).to_string(), 404)
+                    }
                 };
 
                 if self.daily.text_video_tasks[task_index].visited {
-                    return Response::error(json!({"error": "Task already completed"}).to_string(), 400);
+                    return Response::error(
+                        json!({"error": "Task already completed"}).to_string(),
+                        400,
+                    );
                 }
 
                 // Submit to external endpoint first
@@ -588,7 +601,10 @@ impl UserData {
 
                 let res = Fetch::Request(req).send().await?;
                 if !res.status_code() == 200 {
-                    return Response::error(json!({"error": "Failed to submit text answer to backend"}).to_string(), 500);
+                    return Response::error(
+                        json!({"error": "Failed to submit text answer to backend"}).to_string(),
+                        500,
+                    );
                 }
 
                 // Update local state after successful submission
@@ -628,11 +644,15 @@ impl UserData {
                     console_error!("Error syncing data: {:?}", e);
                     Response::error("Failed to sync data", 500)
                 }
-            }
-            
+            },
+
             Op::ProcessNotificationMetadata(notification_id) => {
                 // Find the notification
-                let notification_index = match self.notifications.iter().position(|n| n.notification_id == notification_id.clone()) {
+                let notification_index = match self
+                    .notifications
+                    .iter()
+                    .position(|n| n.notification_id == notification_id.clone())
+                {
                     Some(index) => index,
                     None => return Response::error("Notification not found", 404),
                 };
@@ -644,7 +664,7 @@ impl UserData {
                         self.progress.social_score += 10;
                         self.progress.akai_balance += 50;
                         notification.read = Read::No; // Change to No after processing
-                    },
+                    }
                     NotificationType::Performance => {
                         if let Some(metadata) = &notification.metadata {
                             // Handle Akai balance
@@ -664,7 +684,7 @@ impl UserData {
                             }
                         }
                         notification.read = Read::No; // Change to No after processing
-                    },
+                    }
                     _ => {} // Other notification types don't need processing
                 }
 
@@ -679,21 +699,19 @@ impl UserData {
                         "iq": self.progress.iq,
                         "product": self.progress.product,
                         "notifications": self.notifications
-                       
+
                     })
                     .to_string(),
                 )
             }
 
-            Op::PingPong => {
-                Response::ok(
-                    json!({
-                        "status": "pong",
-                        "timestamp": Date::now().as_millis()
-                    })
-                    .to_string(),
-                )
-            }
+            Op::PingPong => Response::ok(
+                json!({
+                    "status": "pong",
+                    "timestamp": Date::now().as_millis()
+                })
+                .to_string(),
+            ),
 
             Op::GetAvailableCryptos => {
                 let cryptos = crate::crypto::get_available_cryptos(self.progress.iq);
@@ -721,7 +739,9 @@ impl UserData {
                     self.progress.iq,
                     self.progress.akai_balance,
                     &private_key,
-                ).await {
+                )
+                .await
+                {
                     Ok(tx_hash) => {
                         self.progress.akai_balance -= request.akai_amount;
                         Response::ok(
@@ -735,7 +755,7 @@ impl UserData {
                             .to_string(),
                         )
                     }
-                    Err(e) => Response::error(json!({"error": e}).to_string(), 400)
+                    Err(e) => Response::error(json!({"error": e}).to_string(), 400),
                 }
             }
         }

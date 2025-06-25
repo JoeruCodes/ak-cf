@@ -102,7 +102,9 @@ pub async fn send_eth(
 
     let provider = ProviderBuilder::new()
         .wallet(signer)
-        .connect(&rpc_url).await.map_err(|e|e.to_string())?;
+        .connect(&rpc_url)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let amount_str = amount_eth.to_string();
     let value = parse_units(&amount_str, "ether").unwrap().into();
@@ -133,7 +135,9 @@ pub async fn send_erc20(
 
     let provider = ProviderBuilder::new()
         .wallet(signer)
-        .connect(&rpc_url).await.map_err(|e|e.to_string())?;
+        .connect(&rpc_url)
+        .await
+        .map_err(|e| e.to_string())?;
 
     let token_address = contract_address
         .parse()
