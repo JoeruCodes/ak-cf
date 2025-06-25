@@ -4,9 +4,9 @@ use rand::{
     thread_rng, Rng,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
 use worker::{console_log, Date};
-use std::collections::HashMap;
 
 use crate::notification::{Notification, Read};
 use crate::{
@@ -21,11 +21,11 @@ pub enum Op {
     DeleteAlienFromActive(usize),
     MoveAlienInGrid(usize, usize),
     SpawnPowerup(PowerUpKind), //should remove after testing
-    UsePowerup(usize, usize), //changed
+    UsePowerup(usize, usize),  //changed
     GetData,
     Register(String),
     UpdateEmail(String),
-    UpdatePfp(usize),   
+    UpdatePfp(usize),
     UpdateUserName(Option<String>),
     UpdatePassword(String),
     AddNotificationInternal(Notification),
@@ -38,7 +38,9 @@ pub enum Op {
     SyncData,
     SubmitMcqAnswers(String, Vec<String>), // (datapoint_id, answers)
     SubmitTextAnswer(String, usize, String), // (datapoint_id, idx, text)
-    PingPong, // New operation for WebSocket ping/pong
+    PingPong,                              // New operation for WebSocket ping/pong
+    GetAvailableCryptos,                   // Get list of available cryptos for user
+    ExchangeAkaiForCrypto(ExchangeRequest), // Exchange akai for crypto
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -107,7 +109,7 @@ pub struct UserProfile {
     pub user_name: Option<String>,
     pub password: Option<String>,
     pub last_login: u64,
-    pub real_login:u64,
+    pub real_login: u64,
 }
 
 #[derive(Deserialize, Clone, Debug, Serialize)]
@@ -221,7 +223,7 @@ impl Default for UserData {
                 power_ups: vec![
                     PowerUpKind::ColumnPowerUp,
                     PowerUpKind::RowPowerUp,
-                    PowerUpKind::NearestSquarePowerUp
+                    PowerUpKind::NearestSquarePowerUp,
                 ],
                 king_lvl: 1,
                 total_merged_aliens: 0,
@@ -303,30 +305,61 @@ impl UserData {
     pub fn get_daily_login_rewards(&mut self) -> Reward {
         // Give daily login rewards
         self.progress.akai_balance += 20;
-        
+
         // Give 2 random power-ups
         let powerup1 = crate::utils::give_random_power_up(self);
         let powerup2 = crate::utils::give_random_power_up(self);
-        
+
         let mut reward = Reward {
             is_reward: true,
             rewards: HashMap::new(),
         };
-        reward.rewards.insert("akai_balance".to_string(), "20".to_string());
-        reward.rewards.insert("powerup1".to_string(), format!("{:?}", powerup1));
-        reward.rewards.insert("powerup2".to_string(), format!("{:?}", powerup2));
+        reward
+            .rewards
+            .insert("akai_balance".to_string(), "20".to_string());
+        reward
+            .rewards
+            .insert("powerup1".to_string(), format!("{:?}", powerup1));
+        reward
+            .rewards
+            .insert("powerup2".to_string(), format!("{:?}", powerup2));
         if self.progress.streak > 0 {
-            reward.rewards.insert("streak".to_string(), self.progress.streak.to_string());
+            reward
+                .rewards
+                .insert("streak".to_string(), self.progress.streak.to_string());
         }
-        
-        console_log!("Daily login rewards:  +20 Akai,  +2 powerups, streak: {}", self.progress.streak);
+
+        console_log!(
+            "Daily login rewards:  +20 Akai,  +2 powerups, streak: {}",
+            self.progress.streak
+        );
         reward
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Reward {
-    pub is_reward : bool,
+    pub is_reward: bool,
     pub rewards: HashMap<String, String>,
 }
 
+/// Info about a supported crypto
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct CryptoInfo {
+    pub symbol: String,
+    pub name: String,
+    pub network: String, // e.g., "ethereum", "polygon", "bsc"
+    pub rpc_url: String, // network-specific RPC URL
+    pub min_iq: usize,
+    pub exchange_rate: f64,               // How many of this crypto for 1 akai
+    pub contract_address: Option<String>, // None for native tokens like ETH
+    pub decimals: u8,
+}
+
+/// Request to exchange akai for crypto
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ExchangeRequest {
+    pub akai_amount: usize,
+    pub crypto_symbol: String,
+    pub user_wallet_address: String,
+}

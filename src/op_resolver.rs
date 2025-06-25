@@ -5,7 +5,7 @@ use crate::types::DurableObjectAugmentedMsg;
 use crate::utils::{
     fetch_mcq_video_tasks, fetch_text_video_tasks, find_user_id_by_referral_code, give_daily_reward, handle_user_login, BASE_URL
 };
-use crate::{daily_task::*, gpt_voice};
+use crate::{daily_task::*, gpt_voice, crypto::*};
 use rand::Rng;
 use serde_json::json;
 use sha2::digest::Update;
@@ -16,7 +16,7 @@ use worker::{console_error, console_log, D1Database, Date, Env, Response, Result
 
 use crate::{
     sql::insert_new_user,
-    types::{Op, PowerUpKind, UserData, WsMsg, Reward},
+    types::{Op, PowerUpKind, UserData, WsMsg, Reward, ExchangeRequest},
     utils::{calculate_king_alien_lvl, calculate_product, handle_task_submission_rewards},
 };
 
@@ -693,6 +693,50 @@ impl UserData {
                     })
                     .to_string(),
                 )
+            }
+
+            Op::GetAvailableCryptos => {
+                let cryptos = crate::crypto::get_available_cryptos(self.progress.iq);
+                Response::ok(
+                    json!({
+                        "available_cryptos": cryptos,
+                        "user_iq": self.progress.iq,
+                        "akai_balance": self.progress.akai_balance
+                    })
+                    .to_string(),
+                )
+            }
+
+            Op::ExchangeAkaiForCrypto(request) => {
+                let rpc_url = match env.var("ETHEREUM_RPC_URL") {
+                    Ok(val) => val.to_string(),
+                    Err(_) => return Response::error("Ethereum RPC URL not configured", 500),
+                };
+                let private_key = match env.var("WALLET_PRIVATE_KEY") {
+                    Ok(val) => val.to_string(),
+                    Err(_) => return Response::error("Wallet private key not configured", 500),
+                };
+                match crate::crypto::exchange_akai_for_crypto_real(
+                    request,
+                    self.progress.iq,
+                    self.progress.akai_balance,
+                    &private_key,
+                ).await {
+                    Ok(tx_hash) => {
+                        self.progress.akai_balance -= request.akai_amount;
+                        Response::ok(
+                            json!({
+                                "status": "Exchange successful",
+                                "transaction_hash": tx_hash,
+                                "akai_balance": self.progress.akai_balance,
+                                "crypto_symbol": request.crypto_symbol,
+                                "wallet_address": request.user_wallet_address
+                            })
+                            .to_string(),
+                        )
+                    }
+                    Err(e) => Response::error(json!({"error": e}).to_string(), 400)
+                }
             }
         }
     }

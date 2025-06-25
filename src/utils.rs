@@ -8,7 +8,12 @@ use worker::D1Database;
 use worker::*;
 
 use crate::{
-    notification::{Notification, NotificationType}, sql, types::{BadgesKind, GameState, LeagueType, McqPreLabel, McqVideoTask, PowerUpKind, Question, Reward, TextVideoTask, UserData}
+    notification::{Notification, NotificationType},
+    sql,
+    types::{
+        BadgesKind, GameState, LeagueType, McqPreLabel, McqVideoTask, PowerUpKind, Question,
+        Reward, TextVideoTask, UserData,
+    },
 };
 
 // Helper function to convert power_ups to JSON for SQLite
@@ -83,31 +88,41 @@ pub fn calculate_product(user_data: &mut UserData) {
 
 pub fn calculate_king_alien_lvl(user_data: &mut UserData, reward: &mut Reward) {
     // Calculate new level: (highest alien level / 10) + 1
-    let highest_alien = user_data.game_state.active_aliens.iter().max().unwrap_or(&0);
+    let highest_alien = user_data
+        .game_state
+        .active_aliens
+        .iter()
+        .max()
+        .unwrap_or(&0);
     let new_lvl = (highest_alien / 10) + 1;
 
     if new_lvl > user_data.game_state.king_lvl {
-
         // Set reward flag to true
         reward.is_reward = true;
         user_data.game_state.king_lvl = new_lvl;
 
         // Add 50 to akai
         user_data.progress.akai_balance += 50;
-        reward.rewards.insert("akai_balance".to_string(), "50".to_string());
+        reward
+            .rewards
+            .insert("akai_balance".to_string(), "50".to_string());
 
         // Calculate reward alien level: max(1, highest_alien - 3)
         let reward_alien_level = std::cmp::max(1, highest_alien.saturating_sub(3));
         // Add 3 aliens using add_alien_reward_to_grid
         for _ in 0..3 {
             add_alien_reward_to_grid(user_data, reward_alien_level);
-            reward.rewards.insert("alien".to_string(), format!("{}", reward_alien_level));
+            reward
+                .rewards
+                .insert("alien".to_string(), format!("{}", reward_alien_level));
         }
 
         // Add random powerup using give_random_power_up
         let powerup = give_random_power_up(user_data);
         // Add rewards to the hashmap with actual value
-        reward.rewards.insert("powerup".to_string(), format!("{:?}", powerup));
+        reward
+            .rewards
+            .insert("powerup".to_string(), format!("{:?}", powerup));
         calculate_product(user_data);
     }
 }
@@ -115,7 +130,12 @@ pub fn calculate_king_alien_lvl(user_data: &mut UserData, reward: &mut Reward) {
 pub fn give_daily_reward(user_data: &mut UserData, index: usize) {
     if user_data.daily.total_completed >= 3 && user_data.daily.alien_earned.is_none() && index == 3
     {
-        let highest_alien = user_data.game_state.active_aliens.iter().max().unwrap_or(&0);
+        let highest_alien = user_data
+            .game_state
+            .active_aliens
+            .iter()
+            .max()
+            .unwrap_or(&0);
         let earned_alien = std::cmp::max(1, highest_alien - 3);
         user_data.daily.alien_earned = Some(earned_alien);
         add_alien_reward_to_grid(user_data, earned_alien);
@@ -132,7 +152,7 @@ pub const BASE_URL: &str = "https://akailon-game-data-backend.onrender.com";
 pub async fn fetch_mcq_video_tasks(n: usize, _env: &Env) -> Result<Vec<McqVideoTask>> {
     let url = format!("{}/api/game/fetch-mcq-datapoints", BASE_URL); // <-- Replace this
     let payload = serde_json::json!({ "numberOfDatapoints": n }).to_string();
-    console_log!("{}" , 100);
+    console_log!("{}", 100);
     let req = Request::new_with_init(
         &url,
         &RequestInit {
@@ -147,15 +167,14 @@ pub async fn fetch_mcq_video_tasks(n: usize, _env: &Env) -> Result<Vec<McqVideoT
         },
     )?;
 
-
     let mut response = Fetch::Request(req).send().await?;
-    console_log!("{:?}" , response);
+    console_log!("{:?}", response);
 
     let data: serde_json::Value = response.json().await?;
 
     let datapoints = data["datapoints"].as_array().cloned().unwrap_or_default();
 
-    console_log!("{}" , datapoints.len());
+    console_log!("{}", datapoints.len());
 
     let tasks = datapoints
         .iter()
@@ -205,10 +224,7 @@ pub async fn fetch_mcq_video_tasks(n: usize, _env: &Env) -> Result<Vec<McqVideoT
     Ok(tasks)
 }
 
-pub async fn fetch_text_video_tasks(
-    num_tasks: usize,
-    env: &Env,
-) -> Result<Vec<TextVideoTask>> {
+pub async fn fetch_text_video_tasks(num_tasks: usize, env: &Env) -> Result<Vec<TextVideoTask>> {
     let url = format!("{}/api/game/fetch-textQ", BASE_URL);
     let payload = json!({ "noOfQues": num_tasks });
 
@@ -233,11 +249,16 @@ pub async fn fetch_text_video_tasks(
                 let tasks: Vec<TextVideoTask> = questions_arr
                     .iter()
                     .map(|q| {
-                        let datapoint_id = q["datapointId"].as_str().unwrap_or_default().to_string();
-                        let question_index = q["questionIndex"].as_u64().unwrap_or_default() as usize;
+                        let datapoint_id =
+                            q["datapointId"].as_str().unwrap_or_default().to_string();
+                        let question_index =
+                            q["questionIndex"].as_u64().unwrap_or_default() as usize;
                         let question = q["question"].as_str().unwrap_or_default().to_string();
                         let media_url = q["mediaUrl"].as_str().unwrap_or_default().to_string();
-                        let map_placement = q["map_placement"]["value"].as_str().unwrap_or_default().to_string();
+                        let map_placement = q["map_placement"]["value"]
+                            .as_str()
+                            .unwrap_or_default()
+                            .to_string();
                         let keywords: Vec<String> = q["keywords"]
                             .as_array()
                             .unwrap_or(&Vec::new())
@@ -270,9 +291,15 @@ pub async fn fetch_text_video_tasks(
     Ok(Vec::new())
 }
 
-pub async fn find_user_id_by_referral_code(d1: &D1Database, code: &str) -> Result<Option<serde_json::Value>> {
+pub async fn find_user_id_by_referral_code(
+    d1: &D1Database,
+    code: &str,
+) -> Result<Option<serde_json::Value>> {
     let stmt = d1.prepare("SELECT user_id FROM social_data WHERE referal_code = ?");
-    let res = stmt.bind(&[code.into()])?.first::<serde_json::Value>(None).await;
+    let res = stmt
+        .bind(&[code.into()])?
+        .first::<serde_json::Value>(None)
+        .await;
 
     match res {
         Ok(Some(user_id_obj)) => Ok(Some(user_id_obj)),
@@ -285,29 +312,34 @@ pub fn handle_user_login(user_data: &mut UserData, reward: Option<&mut Reward>) 
     let current_time = Date::now().as_millis() / 1000;
     let time_since_last_login = current_time - user_data.profile.real_login;
     let one_hour = 60 * 60;
-    
+
     // Calculate the current hour timestamp (rounded down to the hour)
     let current_hour = (current_time / one_hour) * one_hour;
     let last_reward_hour = (user_data.profile.real_login / one_hour) * one_hour;
-    
+
     // Check if it's been more than 1 hour AND we haven't given a reward in this hour
     if time_since_last_login >= one_hour && current_hour > last_reward_hour {
         user_data.game_state.inventory_aliens += 30;
         user_data.profile.real_login = current_time;
-        
+
         // Add to reward struct if provided
         if let Some(reward) = reward {
-            reward.rewards.insert("inventory_aliens".to_string(), "30".to_string());
+            reward
+                .rewards
+                .insert("inventory_aliens".to_string(), "30".to_string());
         }
-        
-        console_log!("Hourly login reward given: +30 inventory aliens. Time since last: {} seconds", time_since_last_login);
+
+        console_log!(
+            "Hourly login reward given: +30 inventory aliens. Time since last: {} seconds",
+            time_since_last_login
+        );
     } else {
         console_log!("No hourly login reward. Time since last: {} seconds (need {} seconds), current hour: {}, last reward hour: {}", 
                     time_since_last_login, one_hour, current_hour, last_reward_hour);
     }
 }
 
-pub fn give_random_power_up(user_data: &mut UserData)  -> PowerUpKind {
+pub fn give_random_power_up(user_data: &mut UserData) -> PowerUpKind {
     let powerups = [
         PowerUpKind::RowPowerUp,
         PowerUpKind::ColumnPowerUp,
@@ -341,26 +373,36 @@ pub fn add_alien_reward_to_grid(user_data: &mut UserData, alien_level: usize) {
     user_data.game_state.active_aliens[target_index] = alien_level;
 }
 
-pub fn handle_task_submission_rewards(user_data: &mut UserData, reward: &mut Reward, iq_reward: usize, akai_reward: usize) {
+pub fn handle_task_submission_rewards(
+    user_data: &mut UserData,
+    reward: &mut Reward,
+    iq_reward: usize,
+    akai_reward: usize,
+) {
     // Set reward flag
     reward.is_reward = true;
 
     // Add IQ reward
     user_data.progress.iq += iq_reward;
-    reward.rewards.insert("iq".to_string(), iq_reward.to_string());
+    reward
+        .rewards
+        .insert("iq".to_string(), iq_reward.to_string());
 
     // Add Akai reward
     user_data.progress.akai_balance += akai_reward;
-    reward.rewards.insert("akai_balance".to_string(), akai_reward.to_string());
+    reward
+        .rewards
+        .insert("akai_balance".to_string(), akai_reward.to_string());
 
     // Randomly decide to give powerup (30% chance)
     let mut rng = thread_rng();
     if rng.gen_bool(0.3) {
         let powerup = give_random_power_up(user_data);
-        reward.rewards.insert("powerup".to_string(), format!("{:?}", powerup));
+        reward
+            .rewards
+            .insert("powerup".to_string(), format!("{:?}", powerup));
     }
 
     // Recalculate product after rewards
     calculate_product(user_data);
 }
-

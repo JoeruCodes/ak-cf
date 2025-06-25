@@ -78,8 +78,10 @@ pub async fn handle_transcription(mut req: Request, env: Env) -> Result<Response
         .with_headers(headers)
         .with_body(Some(openai_form.into()));
 
-    let openai_req =
-        Request::new_with_init("https://api.openai.com/v1/audio/transcriptions", &request_init)?;
+    let openai_req = Request::new_with_init(
+        "https://api.openai.com/v1/audio/transcriptions",
+        &request_init,
+    )?;
 
     let mut openai_response = match Fetch::Request(openai_req).send().await {
         Ok(res) => res,
@@ -97,7 +99,10 @@ pub async fn handle_transcription(mut req: Request, env: Env) -> Result<Response
         Ok(text) => text,
         Err(e) => {
             console_error!("Failed to read OpenAI response body: {:?}", e);
-            return Response::error(format!("Failed to read OpenAI response body: {}", e), status);
+            return Response::error(
+                format!("Failed to read OpenAI response body: {}", e),
+                status,
+            );
         }
     };
 

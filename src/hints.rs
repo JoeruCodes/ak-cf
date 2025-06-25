@@ -88,8 +88,7 @@ pub fn get_random_hint() -> Hint {
     hints.choose(&mut rng).unwrap().clone()
 }
 
-
 pub fn get_hint_by_id(id: usize) -> Option<Hint> {
     let hints = get_all_hints();
     hints.into_iter().find(|h| h.id == id)
-} 
+}

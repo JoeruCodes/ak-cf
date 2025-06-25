@@ -8,6 +8,7 @@ use wasm_bindgen::JsValue;
 use worker::*;
 
 mod auth;
+mod crypto;
 mod daily_task;
 mod gpt_voice;
 mod hints;
@@ -17,8 +18,6 @@ mod op_resolver;
 mod sql;
 mod types;
 mod utils;
-
-
 
 #[durable_object]
 struct UserDataWrapper {
@@ -41,8 +40,15 @@ impl DurableObject for UserDataWrapper {
         let do_instance_hex_id = self.state.id().to_string();
 
         // Check for WebSocket upgrade request
-        if req.headers().get("Upgrade")?.map_or(false, |h| h.to_lowercase() == "websocket") {
-            console_log!("WebSocket upgrade request for DO instance (hex ID): {}", do_instance_hex_id);
+        if req
+            .headers()
+            .get("Upgrade")?
+            .map_or(false, |h| h.to_lowercase() == "websocket")
+        {
+            console_log!(
+                "WebSocket upgrade request for DO instance (hex ID): {}",
+                do_instance_hex_id
+            );
 
             // Extract the username from the headers, similar to the main fetch logic.
             // This username is the human-readable ID.
@@ -51,7 +57,10 @@ impl DurableObject for UserDataWrapper {
                 Some(username_from_header) => {
                     self.user_id_for_session = Some(username_from_header.clone());
                     // Persist user_id_for_session to storage
-                    self.state.storage().put("user_id_for_session", username_from_header.clone()).await?;
+                    self.state
+                        .storage()
+                        .put("user_id_for_session", username_from_header.clone())
+                        .await?;
                     console_log!(
                         "Set and stored user_id_for_session to: {} for DO instance {}",
                         username_from_header,
@@ -61,8 +70,12 @@ impl DurableObject for UserDataWrapper {
                     let pair = WebSocketPair::new()?;
                     let server_websocket = pair.server;
                     self.state.accept_web_socket(&server_websocket);
-                    
-                    console_log!("WebSocket connection accepted for user: {} (DO instance {})", username_from_header, do_instance_hex_id);
+
+                    console_log!(
+                        "WebSocket connection accepted for user: {} (DO instance {})",
+                        username_from_header,
+                        do_instance_hex_id
+                    );
                     return Response::from_websocket(pair.client);
                 }
                 None => {
@@ -70,24 +83,37 @@ impl DurableObject for UserDataWrapper {
                         "CRITICAL: WebSocket upgrade for DO instance {} missing 'username' header.",
                         do_instance_hex_id
                     );
-                    return Response::error("Unauthorized: Missing username header for WebSocket session", 401);
+                    return Response::error(
+                        "Unauthorized: Missing username header for WebSocket session",
+                        401,
+                    );
                 }
             }
         }
 
         // Existing HTTP request handling logic
-        console_log!("HTTP request for DO instance (hex ID): {}", do_instance_hex_id);
+        console_log!(
+            "HTTP request for DO instance (hex ID): {}",
+            do_instance_hex_id
+        );
         let op_request: DurableObjectAugmentedMsg = match req.json().await {
             Ok(op) => op,
             Err(e) => {
-                console_log!("Failed to parse OpRequest for DO instance {}: {:?}", do_instance_hex_id, e);
+                console_log!(
+                    "Failed to parse OpRequest for DO instance {}: {:?}",
+                    do_instance_hex_id,
+                    e
+                );
                 return Response::error("Invalid request format", 400);
             }
         };
 
         // Use op_request.user_id as the logical user ID for operations and data.
         let logical_user_id = op_request.user_id.clone();
-        console_log!("Processing operation for logical_user_id: {}", logical_user_id);
+        console_log!(
+            "Processing operation for logical_user_id: {}",
+            logical_user_id
+        );
 
         // The check `if op_request.user_id != do_instance_hex_id` is removed as it compares name to hex_id.
         // The routing from main fetch ensures this DO instance corresponds to logical_user_id.
@@ -121,8 +147,12 @@ impl DurableObject for UserDataWrapper {
                 notif.user_id = logical_user_id.clone();
             }
         }
-        
-        console_log!("Host for DO instance {}: {:?}", do_instance_hex_id, req.url());
+
+        console_log!(
+            "Host for DO instance {}: {:?}",
+            do_instance_hex_id,
+            req.url()
+        );
 
         // Registration checks now use logical_user_id
         if !is_registered(&self.env.d1("D1_DATABASE").unwrap(), &logical_user_id).await
@@ -144,14 +174,23 @@ impl DurableObject for UserDataWrapper {
             .await?;
 
         if let Err(e) = self.state.storage().put("user_data", &user_data).await {
-            console_log!("DO instance {}: Storage put error for {}: {:?}", do_instance_hex_id, logical_user_id, e);
+            console_log!(
+                "DO instance {}: Storage put error for {}: {:?}",
+                do_instance_hex_id,
+                logical_user_id,
+                e
+            );
             return Response::error("Internal Server Error", 500);
         }
 
         Ok(response)
     }
 
-    async fn websocket_message(&mut self, ws: WebSocket, message: WebSocketIncomingMessage) -> Result<()> {
+    async fn websocket_message(
+        &mut self,
+        ws: WebSocket,
+        message: WebSocketIncomingMessage,
+    ) -> Result<()> {
         self.ensure_user_id_for_session_loaded().await?;
 
         let do_name = match self.user_id_for_session.as_ref() {
@@ -161,8 +200,13 @@ impl DurableObject for UserDataWrapper {
                     "websocket_message called without user_id_for_session set (DO instance {}). This may happen if the session was not established correctly or data was lost.",
                     self.state.id().to_string()
                 );
-                let _ = ws.close(Some(1011), Some("Internal server error: Session context lost"));
-                return Err(worker::Error::RustError("User ID not set in session".to_string()));
+                let _ = ws.close(
+                    Some(1011),
+                    Some("Internal server error: Session context lost"),
+                );
+                return Err(worker::Error::RustError(
+                    "User ID not set in session".to_string(),
+                ));
             }
         };
 
@@ -195,24 +239,32 @@ impl DurableObject for UserDataWrapper {
         );
 
         if matches!(data.op, Op::Register(_)) {
-            console_log!("DO {}: Register operation not allowed over WebSocket", do_name);
+            console_log!(
+                "DO {}: Register operation not allowed over WebSocket",
+                do_name
+            );
             let _ = ws.send(&"Error: Register operation not allowed over WebSocket");
             return Ok(());
         }
 
-        let mut user_data: UserData = self.state.storage().get("user_data").await.unwrap_or_else(|err| {
-            console_log!(
+        let mut user_data: UserData =
+            self.state
+                .storage()
+                .get("user_data")
+                .await
+                .unwrap_or_else(|err| {
+                    console_log!(
                 "DO {}: Failed to get user_data in websocket_message (normal for new user): {:?}",
                 do_name,
                 err
             );
-            let mut user = UserData::default();
-            user.profile.user_id = do_name.clone();
-            for notif in &mut user.notifications {
-                notif.user_id = do_name.clone();
-            }
-            user
-        });
+                    let mut user = UserData::default();
+                    user.profile.user_id = do_name.clone();
+                    for notif in &mut user.notifications {
+                        notif.user_id = do_name.clone();
+                    }
+                    user
+                });
 
         // Ensure consistency
         if user_data.profile.user_id != do_name {
@@ -225,13 +277,16 @@ impl DurableObject for UserDataWrapper {
         }
 
         user_data.calculate_last_login();
-        
+
         let op_msg = DurableObjectAugmentedMsg {
             user_id: do_name.clone(),
             op: data.op,
         };
 
-        match user_data.resolve_op(&op_msg, &self.env.d1("D1_DATABASE")?, &self.env).await {
+        match user_data
+            .resolve_op(&op_msg, &self.env.d1("D1_DATABASE")?, &self.env)
+            .await
+        {
             Ok(mut res) => match res.json::<Value>().await {
                 Ok(response_text) => {
                     console_log!(
@@ -247,28 +302,50 @@ impl DurableObject for UserDataWrapper {
                     let error_msg = format!("Error reading DO response body: {}", e);
                     console_error!("DO {}: {}", do_name, error_msg);
                     if let Err(e_send) = ws.send(&error_msg) {
-                        console_error!("DO {}: Error sending WebSocket error message: {}", do_name, e_send);
+                        console_error!(
+                            "DO {}: Error sending WebSocket error message: {}",
+                            do_name,
+                            e_send
+                        );
                     }
                 }
             },
             Err(e) => {
-                console_log!("DO {}: Failed to resolve op via WebSocket: {:?}", do_name, e);
+                console_log!(
+                    "DO {}: Failed to resolve op via WebSocket: {:?}",
+                    do_name,
+                    e
+                );
                 let error_msg = format!("Error processing operation: {}", e);
                 if let Err(e_send) = ws.send(&error_msg) {
-                    console_error!("DO {}: Error sending WebSocket error message: {}", do_name, e_send);
+                    console_error!(
+                        "DO {}: Error sending WebSocket error message: {}",
+                        do_name,
+                        e_send
+                    );
                 }
             }
         }
 
         if let Err(e) = self.state.storage().put("user_data", &user_data).await {
-            console_error!("DO {}: Storage put error after websocket_message: {:?}", do_name, e);
+            console_error!(
+                "DO {}: Storage put error after websocket_message: {:?}",
+                do_name,
+                e
+            );
             // Optionally inform client if appropriate, though primary op response is more critical
         }
 
         Ok(())
     }
 
-    async fn websocket_close(&mut self, _ws: WebSocket, _code: usize, _reason: String, _was_clean: bool) -> Result<()> {
+    async fn websocket_close(
+        &mut self,
+        _ws: WebSocket,
+        _code: usize,
+        _reason: String,
+        _was_clean: bool,
+    ) -> Result<()> {
         self.ensure_user_id_for_session_loaded().await?;
 
         let do_name = match self.user_id_for_session.as_ref() {
@@ -280,7 +357,9 @@ impl DurableObject for UserDataWrapper {
                 );
                 // Attempt to delete from storage anyway, in case it's there but wasn't loaded.
                 let _ = self.state.storage().delete("user_id_for_session").await;
-                return Err(worker::Error::RustError("User ID not set in session on close".to_string()));
+                return Err(worker::Error::RustError(
+                    "User ID not set in session on close".to_string(),
+                ));
             }
         };
         console_log!("DO {}: WebSocket connection closed.", do_name);
@@ -288,7 +367,11 @@ impl DurableObject for UserDataWrapper {
 
         // Clean up stored session ID
         if let Err(e) = self.state.storage().delete("user_id_for_session").await {
-            console_error!("DO {}: Failed to delete user_id_for_session from storage on close: {:?}", do_name, e);
+            console_error!(
+                "DO {}: Failed to delete user_id_for_session from storage on close: {:?}",
+                do_name,
+                e
+            );
         }
         self.user_id_for_session = None; // Clear in-memory field
 
@@ -308,7 +391,9 @@ impl DurableObject for UserDataWrapper {
                 );
                 // Attempt to delete from storage anyway.
                 let _ = self.state.storage().delete("user_id_for_session").await;
-                return Err(worker::Error::RustError("User ID not set in session on error".to_string()));
+                return Err(worker::Error::RustError(
+                    "User ID not set in session on error".to_string(),
+                ));
             }
         };
         console_error!("DO {}: WebSocket error: {:?}", do_name, _error);
@@ -316,7 +401,11 @@ impl DurableObject for UserDataWrapper {
 
         // Clean up stored session ID
         if let Err(e) = self.state.storage().delete("user_id_for_session").await {
-            console_error!("DO {}: Failed to delete user_id_for_session from storage on error: {:?}", do_name, e);
+            console_error!(
+                "DO {}: Failed to delete user_id_for_session from storage on error: {:?}",
+                do_name,
+                e
+            );
         }
         self.user_id_for_session = None; // Clear in-memory field
 
@@ -365,7 +454,7 @@ impl UserDataWrapper {
         if user_data.profile.user_id != do_name {
             user_data.profile.user_id = do_name.to_string();
         }
-         for notif in &mut user_data.notifications {
+        for notif in &mut user_data.notifications {
             if notif.user_id != do_name {
                 notif.user_id = do_name.to_string();
             }
@@ -376,7 +465,10 @@ impl UserDataWrapper {
             op: Op::SyncData, // Assuming Op::SyncData exists
         };
 
-        match user_data.resolve_op(&op_msg, &self.env.d1("D1_DATABASE").unwrap(), &self.env).await {
+        match user_data
+            .resolve_op(&op_msg, &self.env.d1("D1_DATABASE").unwrap(), &self.env)
+            .await
+        {
             Ok(_) => {
                 console_log!("DO {}: SyncData on disconnect successful.", do_name);
                 if let Err(e) = self.state.storage().put("user_data", &user_data).await {
@@ -450,30 +542,36 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
         // Use the user_id from the registration body to name/get the DO
         let do_id = do_ns.id_from_name(&user_id)?;
         let do_stub = do_id.get_stub()?;
-        
+
         let op_msg = DurableObjectAugmentedMsg { user_id, op }; // user_id is from RegisterBody
-        
+
         let op_request_json = match serde_json::to_string(&op_msg) {
             Ok(json) => json,
             Err(e) => {
                 console_error!("Failed to serialize Op::Register message: {:?}", e);
-                return Response::error("Internal Server Error: Failed to create registration request", 500);
+                return Response::error(
+                    "Internal Server Error: Failed to create registration request",
+                    500,
+                );
             }
         };
 
         let mut request_init = RequestInit::new();
         request_init.with_method(Method::Post);
         request_init.with_body(Some(JsValue::from_str(&op_request_json)));
-        
+
         // The URL for the DO request can be a placeholder as it's not used for routing when calling a stub directly.
         let do_req = match Request::new_with_init("https://do-internal/register", &request_init) {
             Ok(r) => r,
             Err(e) => {
                 console_error!("Failed to create Request for DO (Op::Register): {:?}", e);
-                return Response::error("Internal Server Error: Failed to create registration sub-request", 500);
+                return Response::error(
+                    "Internal Server Error: Failed to create registration sub-request",
+                    500,
+                );
             }
         };
-        
+
         return do_stub.fetch_with_request(do_req).await;
     } else if path == "/api/transcribe" {
         if auth::authenticate_user(&req, &env).await?.is_none() {
@@ -489,7 +587,7 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
     console_log!("Not a leaderboard or register");
 
     if let Some(upgrade_header) = req.headers().get("Upgrade")? {
-        let Some( mut username_header) = req.headers().get("username")? else {
+        let Some(mut username_header) = req.headers().get("username")? else {
             // If username header is missing, we can immediately return Unauthorized.
             console_log!("Unauthorized: Missing username");
             return Response::error("Unauthorized: Missing username", 401);
@@ -514,43 +612,45 @@ pub async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response
                 user_name,
                 password,
             })) => {
-                
-
                 let sha256 = sha2::Sha256::new();
 
                 let password_header = sha256.chain(password_header.as_bytes()).finalize();
 
-                if (user_name.as_ref().map(|s| s == &username_header).unwrap_or(false)
-    || user_id == username_header)
-    && password == hex::encode(password_header) {
+                if (user_name
+                    .as_ref()
+                    .map(|s| s == &username_header)
+                    .unwrap_or(false)
+                    || user_id == username_header)
+                    && password == hex::encode(password_header)
+                {
                     // Credentials match, proceed with WebSocket upgrade
-                    
                 } else {
-
                     // Password doesn't match
                     return Response::error("Unauthorized: Invalid credentials", 401);
                 }
-                username_header=user_id.clone();
+                username_header = user_id.clone();
             }
             Ok(None) => {
                 // User not found
                 console_log!("Unauthorized: User not found");
                 return Response::error("Unauthorized: User not found", 401);
             }
-           Err(e) => {
+            Err(e) => {
                 console_error!("Database error during authentication: {:?}", e);
                 return Response::error("Internal Server Error", 500);
             }
-        } 
-                console_log!("Database");
-
+        }
+        console_log!("Database");
 
         if upgrade_header.to_lowercase() == "websocket" {
             let do_namespace = env.durable_object("USER_DATA_WRAPPER")?;
             let do_id = do_namespace.id_from_name(&username_header)?; // username_header is the authenticated user_id
             let do_stub = do_id.get_stub()?;
 
-            console_log!("Forwarding WebSocket request for user {} to DO", username_header);
+            console_log!(
+                "Forwarding WebSocket request for user {} to DO",
+                username_header
+            );
             return do_stub.fetch_with_request(req).await; // Forward the original request
         }
     }

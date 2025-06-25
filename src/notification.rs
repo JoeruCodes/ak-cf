@@ -1,10 +1,10 @@
+use crate::types::{DurableObjectAugmentedMsg, Op};
 use crate::{Env, JsValue};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 use worker::*;
-use crate::{types::{DurableObjectAugmentedMsg, Op}};
 
 #[derive(Deserialize, Clone, Debug, Serialize, PartialEq)]
 pub struct Notification {
@@ -61,9 +61,33 @@ pub struct RewardConfig {
 
 pub fn get_reward_config(task_type: &str) -> Option<RewardConfig> {
     let mut map = HashMap::new();
-    map.insert("mcq", RewardConfig { akai_on_correct: 10, akai_on_incorrect: 0, iq_on_correct: 5, iq_on_incorrect: -10 });
-    map.insert("text", RewardConfig { akai_on_correct: 15, akai_on_incorrect: 0, iq_on_correct: 7, iq_on_incorrect: -10 });
-    map.insert("audio", RewardConfig { akai_on_correct: 20, akai_on_incorrect: 0, iq_on_correct: 10, iq_on_incorrect: -3 });
+    map.insert(
+        "mcq",
+        RewardConfig {
+            akai_on_correct: 10,
+            akai_on_incorrect: 0,
+            iq_on_correct: 5,
+            iq_on_incorrect: -10,
+        },
+    );
+    map.insert(
+        "text",
+        RewardConfig {
+            akai_on_correct: 15,
+            akai_on_incorrect: 0,
+            iq_on_correct: 7,
+            iq_on_incorrect: -10,
+        },
+    );
+    map.insert(
+        "audio",
+        RewardConfig {
+            akai_on_correct: 20,
+            akai_on_incorrect: 0,
+            iq_on_correct: 10,
+            iq_on_incorrect: -3,
+        },
+    );
     map.get(task_type).copied()
 }
 
@@ -74,10 +98,7 @@ pub async fn push_notification_to_user_do(
     message: &str,
     metadata: Option<HashMap<String, String>>,
 ) -> Result<()> {
-    console_log!(
-        "Attempting to push notification for user_id: {}",
-        user_id
-    );
+    console_log!("Attempting to push notification for user_id: {}", user_id);
     let do_ns = env.durable_object("USER_DATA_WRAPPER")?;
     let do_id = do_ns.id_from_name(user_id)?;
     let stub = do_id.get_stub()?;
@@ -91,28 +112,25 @@ pub async fn push_notification_to_user_do(
         read: Read::No,
         metadata,
     };
-    
+
     let do_msg = DurableObjectAugmentedMsg {
         user_id: user_id.to_string(),
         op: Op::AddNotificationInternal(notif),
     };
 
-    let body = serde_json::to_string(&do_msg)
-        .map_err(|e| worker::Error::RustError(e.to_string()))?;
-    
+    let body =
+        serde_json::to_string(&do_msg).map_err(|e| worker::Error::RustError(e.to_string()))?;
+
     let mut request_init = RequestInit::new();
     request_init
         .with_method(Method::Post)
         .with_body(Some(wasm_bindgen::JsValue::from_str(&body)));
-    
+
     let req = Request::new_with_init("https://do-internal/notification", &request_init)?;
-    
+
     match stub.fetch_with_request(req).await {
         Ok(_) => {
-            console_log!(
-                "Successfully pushed notification for user_id: {}",
-                user_id
-            );
+            console_log!("Successfully pushed notification for user_id: {}", user_id);
             Ok(())
         }
         Err(e) => {
@@ -161,19 +179,22 @@ pub async fn notify_task_result(mut req: Request, env: &Env) -> Result<Response>
             user_data.flagged
         );
         let is_correct = !user_data.flagged;
-        
+
         if let Some(config) = get_reward_config(&user_data.task_type) {
             let (akai_reward, iq_change, message) = if is_correct {
                 (
-                    config.akai_on_correct, 
-                    config.iq_on_correct as isize, 
-                    format!("Task '{}' correct. Keep it up!", user_data.task_type)
+                    config.akai_on_correct,
+                    config.iq_on_correct as isize,
+                    format!("Task '{}' correct. Keep it up!", user_data.task_type),
                 )
             } else {
                 (
-                    config.akai_on_incorrect, 
-                    -(config.iq_on_incorrect as isize), 
-                    format!("Task '{}' incorrect. This will result in loss of IQ.", user_data.task_type)
+                    config.akai_on_incorrect,
+                    -(config.iq_on_incorrect as isize),
+                    format!(
+                        "Task '{}' incorrect. This will result in loss of IQ.",
+                        user_data.task_type
+                    ),
                 )
             };
 
@@ -187,7 +208,9 @@ pub async fn notify_task_result(mut req: Request, env: &Env) -> Result<Response>
                 NotificationType::Performance,
                 &message,
                 Some(metadata),
-            ).await {
+            )
+            .await
+            {
                 console_error!(
                     "Failed to push notification for user {}: {:?}",
                     user_data.user_id,
@@ -205,4 +228,3 @@ pub async fn notify_task_result(mut req: Request, env: &Env) -> Result<Response>
     console_log!("Finished processing reward distribution.");
     Response::ok("Reward distribution processed.")
 }
-
