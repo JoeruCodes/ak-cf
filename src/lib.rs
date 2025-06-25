@@ -14,7 +14,6 @@ mod hints;
 mod leaderboard;
 mod notification;
 mod op_resolver;
-mod registry;
 mod sql;
 mod types;
 mod utils;

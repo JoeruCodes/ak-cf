@@ -11,9 +11,6 @@ bindings = [
   { name = "USER_DATA_WRAPPER", class_name = "UserDataWrapper" },
 ]
 
-[triggers]
-crons = ["*/10 * * * *"]
-
 [[migrations]]
 tag = "v1"
 new_classes = [ "UserDataWrapper" ]

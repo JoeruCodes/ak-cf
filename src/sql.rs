@@ -122,7 +122,7 @@ pub async fn insert_new_user(data: &UserData, d1: &D1Database) -> Result<()> {
                 .unwrap_or_else(JsValue::null),
             data.profile.pfp.into(),
             (data.profile.last_login as f64).into(),
-            (data.profile.last_login as f64).into(),
+            (data.profile.real_login as f64).into(),
         ])?
         .run()
         .await?;

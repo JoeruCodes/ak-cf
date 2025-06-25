@@ -285,9 +285,13 @@ pub fn handle_user_login(user_data: &mut UserData, reward: Option<&mut Reward>) 
     let current_time = Date::now().as_millis() / 1000;
     let time_since_last_login = current_time - user_data.profile.real_login;
     let one_hour = 60 * 60;
-
-    //distribute 30 inv aliens if more than 1 hr
-    if time_since_last_login >= one_hour {
+    
+    // Calculate the current hour timestamp (rounded down to the hour)
+    let current_hour = (current_time / one_hour) * one_hour;
+    let last_reward_hour = (user_data.profile.real_login / one_hour) * one_hour;
+    
+    // Check if it's been more than 1 hour AND we haven't given a reward in this hour
+    if time_since_last_login >= one_hour && current_hour > last_reward_hour {
         user_data.game_state.inventory_aliens += 30;
         user_data.profile.real_login = current_time;
         
@@ -295,6 +299,11 @@ pub fn handle_user_login(user_data: &mut UserData, reward: Option<&mut Reward>) 
         if let Some(reward) = reward {
             reward.rewards.insert("inventory_aliens".to_string(), "30".to_string());
         }
+        
+        console_log!("Hourly login reward given: +30 inventory aliens. Time since last: {} seconds", time_since_last_login);
+    } else {
+        console_log!("No hourly login reward. Time since last: {} seconds (need {} seconds), current hour: {}, last reward hour: {}", 
+                    time_since_last_login, one_hour, current_hour, last_reward_hour);
     }
 }
 
