@@ -40,7 +40,7 @@ pub enum Op {
     SubmitTextAnswer(String, usize, String), // (datapoint_id, idx, text)
     PingPong,                              // New operation for WebSocket ping/pong
     GetAvailableCryptos,                   // Get list of available cryptos for user
-    ExchangeAkaiForCrypto(ExchangeRequest), // Exchange akai for crypto
+    ExchangeAkaiForCrypto(usize , String,String), // Exchange akai for crypto
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -355,7 +355,6 @@ pub struct CryptoInfo {
     pub contract_address: Option<String>, // None for native tokens like ETH
     pub decimals: u8,
 }
-
 /// Request to exchange akai for crypto
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ExchangeRequest {
@@ -363,3 +362,4 @@ pub struct ExchangeRequest {
     pub crypto_symbol: String,
     pub user_wallet_address: String,
 }
+

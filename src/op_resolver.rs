@@ -725,17 +725,16 @@ impl UserData {
                 )
             }
 
-            Op::ExchangeAkaiForCrypto(request) => {
-                let rpc_url = match env.var("ETHEREUM_RPC_URL") {
-                    Ok(val) => val.to_string(),
-                    Err(_) => return Response::error("Ethereum RPC URL not configured", 500),
-                };
-                let private_key = match env.var("WALLET_PRIVATE_KEY") {
-                    Ok(val) => val.to_string(),
-                    Err(_) => return Response::error("Wallet private key not configured", 500),
-                };
+            Op::ExchangeAkaiForCrypto(amount, symbol, receiver_addr) => {
+                console_log!("amount: {}", amount);
+                console_log!("symbol: {}", symbol);
+                console_log!("receiver_addr: {}", receiver_addr);
+                let private_key = "2d73f50cd6ce3cf874950d9a420216beeb873eb64d2556e559aa6b2539a2eda8";
+
                 match crate::crypto::exchange_akai_for_crypto_real(
-                    request,
+                    *amount,
+                    &symbol,
+                    &receiver_addr,
                     self.progress.iq,
                     self.progress.akai_balance,
                     &private_key,
@@ -743,19 +742,20 @@ impl UserData {
                 .await
                 {
                     Ok(tx_hash) => {
-                        self.progress.akai_balance -= request.akai_amount;
+                        self.progress.akai_balance -= *amount;
                         Response::ok(
                             json!({
                                 "status": "Exchange successful",
                                 "transaction_hash": tx_hash,
-                                "akai_balance": self.progress.akai_balance,
-                                "crypto_symbol": request.crypto_symbol,
-                                "wallet_address": request.user_wallet_address
+                                "akai_deducted": *amount,
+                                "new_akai_balance": self.progress.akai_balance,
+                                "crypto_symbol": symbol,
+                                "wallet_address": receiver_addr
                             })
                             .to_string(),
                         )
                     }
-                    Err(e) => Response::error(json!({"error": e}).to_string(), 400),
+                    Err(e) => Response::error(json!({ "error": e }).to_string(), 400),
                 }
             }
         }

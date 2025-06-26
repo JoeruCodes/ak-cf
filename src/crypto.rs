@@ -12,9 +12,9 @@ pub fn all_cryptos() -> Vec<CryptoInfo> {
     vec![
         CryptoInfo {
             symbol: "ETH".to_string(),
-            name: "Ethereum".to_string(),
-            network: "ethereum".to_string(),
-            rpc_url: "https://mainnet.infura.io/v3/your_key".to_string(),
+            name: "Ethereum (Sepolia)".to_string(),
+            network: "sepolia".to_string(),
+            rpc_url: "https://sepolia.infura.io/v3/e31e354de1424fd2830aeeab107012da".to_string(),
             min_iq: 10,
             exchange_rate: 0.0005, // 1 akai = 0.0005 ETH
             contract_address: None,
@@ -100,11 +100,13 @@ pub async fn send_eth(
         .parse()
         .map_err(|e| format!("Invalid recipient address: {e}"))?;
 
+    worker::console_log!("Attempting to connect to RPC provider...");
     let provider = ProviderBuilder::new()
         .wallet(signer)
         .connect(&rpc_url)
         .await
         .map_err(|e| e.to_string())?;
+    worker::console_log!("Successfully connected to RPC provider.");
 
     let amount_str = amount_eth.to_string();
     let value = parse_units(&amount_str, "ether").unwrap().into();
@@ -133,11 +135,13 @@ pub async fn send_erc20(
         .parse()
         .map_err(|e| format!("Invalid private key: {e}"))?;
 
+    worker::console_log!("Attempting to connect to RPC provider (for ERC20)...");
     let provider = ProviderBuilder::new()
         .wallet(signer)
         .connect(&rpc_url)
         .await
         .map_err(|e| e.to_string())?;
+    worker::console_log!("Successfully connected to RPC provider (for ERC20).");
 
     let token_address = contract_address
         .parse()
@@ -160,20 +164,23 @@ pub async fn send_erc20(
 
 /// Exchange Akai for crypto using real blockchain logic
 pub async fn exchange_akai_for_crypto_real(
-    req: &ExchangeRequest,
+    akai_amount: usize,
+    crypto_symbol: &str,
+    user_wallet_address: &str,
     user_iq: usize,
     user_akai_balance: usize,
     private_key: &str,
 ) -> Result<String, String> {
+    worker::console_log!("Entering exchange_akai_for_crypto_real...");
     let cryptos = get_available_cryptos(user_iq);
     let crypto = cryptos
         .iter()
-        .find(|c| c.symbol == req.crypto_symbol && req.user_wallet_address.starts_with("0x"))
+        .find(|c| c.symbol == crypto_symbol && user_wallet_address.starts_with("0x"))
         .ok_or_else(|| "Crypto not available for your IQ or invalid address".to_string())?;
-    if req.akai_amount > user_akai_balance {
+    if akai_amount > user_akai_balance {
         return Err("Insufficient akai balance".to_string());
     }
-    let amount = (req.akai_amount as f64) * crypto.exchange_rate;
+    let amount = (akai_amount as f64) * crypto.exchange_rate;
     if amount <= 0.0 {
         return Err("Amount too low".to_string());
     }
@@ -185,7 +192,7 @@ pub async fn exchange_akai_for_crypto_real(
         send_eth(
             &crypto.rpc_url,
             private_key,
-            &req.user_wallet_address,
+            user_wallet_address,
             amount,
         )
         .await
@@ -194,7 +201,7 @@ pub async fn exchange_akai_for_crypto_real(
             &crypto.rpc_url,
             private_key,
             crypto.contract_address.as_ref().unwrap(),
-            &req.user_wallet_address,
+            user_wallet_address,
             amount,
             crypto.decimals,
         )
