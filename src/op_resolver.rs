@@ -17,7 +17,7 @@ use worker::{console_error, console_log, D1Database, Date, Env, Response, Result
 
 use crate::{
     sql::insert_new_user,
-    types::{ExchangeRequest, Op, PowerUpKind, Reward, UserData, WsMsg},
+    types::{ Op, PowerUpKind, Reward, UserData, WsMsg},
     utils::{calculate_king_alien_lvl, calculate_product, handle_task_submission_rewards},
 };
 
@@ -339,7 +339,7 @@ impl UserData {
                         let mut metadata = HashMap::new();
                         metadata.insert("used_by".to_string(), op_request.user_id.clone());
                         metadata.insert("social_score".to_string(), "10".to_string());
-                        metadata.insert("akai_balance".to_string(), "25".to_string());
+                        metadata.insert("akai_balance".to_string(), "5".to_string());
 
                         if let Err(e) = push_notification_to_user_do(
                             &env,
@@ -545,7 +545,7 @@ impl UserData {
                     is_reward: false,
                     rewards: HashMap::new(),
                 };
-                handle_task_submission_rewards(self, &mut reward, 5, 10);
+                handle_task_submission_rewards(self, &mut reward, 2, 3);
 
                 Response::ok(
                     json!({
@@ -623,7 +623,7 @@ impl UserData {
                     is_reward: false,
                     rewards: HashMap::new(),
                 };
-                handle_task_submission_rewards(self, &mut reward, 10, 20);
+                handle_task_submission_rewards(self, &mut reward, 3, 4);
 
                 Response::ok(
                     json!({
@@ -669,8 +669,10 @@ impl UserData {
                         if let Some(metadata) = &notification.metadata {
                             // Handle Akai balance
                             if let Some(akai_str) = metadata.get("akai_balance") {
-                                if let Ok(akai) = akai_str.parse::<usize>() {
-                                    self.progress.akai_balance += akai;
+                                if let Ok(akai_change) = akai_str.parse::<isize>() {
+                                    let current_akai = self.progress.akai_balance as isize;
+                                    let new_akai = (current_akai + akai_change).max(0);
+                                    self.progress.akai_balance = new_akai as usize;
                                 }
                             }
 
@@ -714,7 +716,7 @@ impl UserData {
             ),
 
             Op::GetAvailableCryptos => {
-                let cryptos = crate::crypto::get_available_cryptos(self.progress.iq);
+                let cryptos = all_cryptos();
                 Response::ok(
                     json!({
                         "available_cryptos": cryptos,
@@ -725,11 +727,35 @@ impl UserData {
                 )
             }
 
+            Op::GetCryptoExchangeAmount(akai_amount, crypto_symbol) => {
+                match crate::crypto::calculate_crypto_amount(*akai_amount, self.progress.iq, &crypto_symbol).await {
+                    Ok(amount) => Response::ok(
+                        json!({
+                            "crypto_amount": amount,
+                        })
+                        .to_string(),
+                    ),
+                    Err(e) => Response::error(&e, 400),
+                }
+            }
+
             Op::ExchangeAkaiForCrypto(amount, symbol, receiver_addr) => {
                 console_log!("amount: {}", amount);
                 console_log!("symbol: {}", symbol);
                 console_log!("receiver_addr: {}", receiver_addr);
-                let private_key = "2d73f50cd6ce3cf874950d9a420216beeb873eb64d2556e559aa6b2539a2eda8";
+                let private_key: String = match env.secret("WALLET_PRIVATE_KEY") {
+                    Ok(secret) => secret.to_string(),
+                    Err(e) => {
+                        console_error!("Failed to get WALLET_PRIVATE_KEY secret: {:?}", e);
+                        return Response::error("WALLET_PRIVATE_KEY secret not configured", 500);
+                    }
+                };
+                console_log!("private_key: {}", private_key);
+
+                // Check akai balance immediately
+                if self.progress.akai_balance < *amount {
+                    return Response::error("Insufficient akai balance", 400);
+                }
 
                 match crate::crypto::exchange_akai_for_crypto_real(
                     *amount,

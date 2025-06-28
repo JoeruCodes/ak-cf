@@ -40,7 +40,8 @@ pub enum Op {
     SubmitTextAnswer(String, usize, String), // (datapoint_id, idx, text)
     PingPong,                              // New operation for WebSocket ping/pong
     GetAvailableCryptos,                   // Get list of available cryptos for user
-    ExchangeAkaiForCrypto(usize , String,String), // Exchange akai for crypto
+    ExchangeAkaiForCrypto(usize, String, String), // Exchange akai for crypto
+    GetCryptoExchangeAmount(usize, String), // akai_amount, crypto_symbol
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -344,22 +345,29 @@ pub struct Reward {
 }
 
 /// Info about a supported crypto
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CryptoInfo {
     pub symbol: String,
     pub name: String,
-    pub network: String, // e.g., "ethereum", "polygon", "bsc"
-    pub rpc_url: String, // network-specific RPC URL
+    pub network: String,
+    pub rpc_url: String,
     pub min_iq: usize,
-    pub exchange_rate: f64,               // How many of this crypto for 1 akai
-    pub contract_address: Option<String>, // None for native tokens like ETH
+    pub api_id: String, // CoinGecko API ID
+    pub contract_address: Option<String>,
     pub decimals: u8,
 }
-/// Request to exchange akai for crypto
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct ExchangeRequest {
-    pub akai_amount: usize,
-    pub crypto_symbol: String,
-    pub user_wallet_address: String,
+
+
+
+
+
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+pub struct ExchangeAkaiForCrypto {
+    pub tx_hash: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+pub struct CryptoExchangeAmount {
+    pub amount: f64,
 }
 

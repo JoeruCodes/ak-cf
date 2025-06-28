@@ -1,4 +1,4 @@
-use crate::types::{CryptoInfo, ExchangeRequest};
+use crate::types::{CryptoInfo};
 use alloy::{
     network::TransactionBuilder,
     primitives::utils::parse_units,
@@ -6,76 +6,124 @@ use alloy::{
     signers::local::PrivateKeySigner,
     sol,
 };
+use serde::Deserialize;
+use std::collections::HashMap;
+use worker::{Fetch, Request, RequestInit, Response, Method};
+
+const AKAI_RATE_IN_USDT: f64 = 0.01;
+
+#[derive(Deserialize, Debug)]
+struct CoinGeckoPrice {
+    usd: f64,
+}
 
 /// Static list of supported cryptos
 pub fn all_cryptos() -> Vec<CryptoInfo> {
     vec![
+        // Meme Coins
+        CryptoInfo {
+            symbol: "SHIB".to_string(),
+            name: "Shiba Inu".to_string(),
+            network: "ethereum".to_string(),
+            rpc_url: "https://cloudflare-eth.com".to_string(),
+            min_iq: 200,
+            api_id: "shiba-inu".to_string(),
+            contract_address: Some("0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce".to_string()),
+            decimals: 18,
+        },
+        CryptoInfo {
+            symbol: "PEPE".to_string(),
+            name: "Pepe".to_string(),
+            network: "ethereum".to_string(),
+            rpc_url: "https://cloudflare-eth.com".to_string(),
+            min_iq: 200,
+            api_id: "pepe".to_string(),
+            contract_address: Some("0x6982508145454ce325ddbe47a25d4ec3d2311933".to_string()),
+            decimals: 18,
+        },
+        CryptoInfo {
+            symbol: "TURBO".to_string(),
+            name: "Turbo".to_string(),
+            network: "ethereum".to_string(),
+            rpc_url: "https://cloudflare-eth.com".to_string(),
+            min_iq: 200,
+            api_id: "turbo".to_string(),
+            contract_address: Some("0xa35923162c49cf95e6bf26623385eb431ad920d3".to_string()),
+            decimals: 18,
+        },
+        CryptoInfo {
+            symbol: "CORGIAI".to_string(),
+            name: "CorgiAI".to_string(),
+            network: "cronos".to_string(),
+            rpc_url: "https://evm.cronos.org/".to_string(),
+            min_iq: 300,
+            api_id: "corgiai".to_string(),
+            contract_address: Some("0x6b431b8a964bfcf28191b07c91189ff4403957d0".to_string()),
+            decimals: 18,
+        },
+        CryptoInfo {
+            symbol: "FLOKI".to_string(),
+            name: "Floki".to_string(),
+            network: "ethereum".to_string(),
+            rpc_url: "https://cloudflare-eth.com".to_string(),
+            min_iq: 300,
+            api_id: "floki".to_string(),
+            contract_address: Some("0xcf0c122c6b73ff809c693db761e7baebe62b6a2e".to_string()),
+            decimals: 9,
+        },
+
+        // Native Coins
         CryptoInfo {
             symbol: "ETH".to_string(),
-            name: "Ethereum (Sepolia)".to_string(),
-            network: "sepolia".to_string(),
-            rpc_url: "https://sepolia.infura.io/v3/e31e354de1424fd2830aeeab107012da".to_string(),
-            min_iq: 10,
-            exchange_rate: 0.0005, // 1 akai = 0.0005 ETH
-            contract_address: None,
-            decimals: 18,
-        },
-        CryptoInfo {
-            symbol: "USDT".to_string(),
-            name: "Tether USD".to_string(),
+            name: "Ethereum".to_string(),
             network: "ethereum".to_string(),
-            rpc_url: "https://mainnet.infura.io/v3/your_key".to_string(),
-            min_iq: 20,
-            exchange_rate: 0.8, // 1 akai = 0.8 USDT
-            contract_address: Some("0xdAC17F958D2ee523a2206206994597C13D831ec7".to_string()),
-            decimals: 6,
-        },
-        CryptoInfo {
-            symbol: "MATIC".to_string(),
-            name: "Polygon".to_string(),
-            network: "polygon".to_string(),
-            rpc_url: "https://polygon-rpc.com".to_string(),
-            min_iq: 30,
-            exchange_rate: 1.2, // 1 akai = 1.2 MATIC
+            rpc_url: "https://cloudflare-eth.com".to_string(),
+            min_iq: 400,
+            api_id: "ethereum".to_string(),
             contract_address: None,
             decimals: 18,
-        },
-        CryptoInfo {
-            symbol: "USDT".to_string(),
-            name: "Tether USD (Polygon)".to_string(),
-            network: "polygon".to_string(),
-            rpc_url: "https://polygon-rpc.com".to_string(),
-            min_iq: 30,
-            exchange_rate: 0.8, // 1 akai = 0.8 USDT
-            contract_address: Some("0x3813e82e6f7098b9583FC0F33a962D02018B6803".to_string()),
-            decimals: 6,
         },
         CryptoInfo {
             symbol: "BNB".to_string(),
             name: "BNB".to_string(),
             network: "bsc".to_string(),
             rpc_url: "https://bsc-dataseed.binance.org/".to_string(),
-            min_iq: 30,
-            exchange_rate: 0.5, // 1 akai = 0.5 BNB
+            min_iq: 400,
+            api_id: "binancecoin".to_string(),
             contract_address: None,
             decimals: 18,
         },
         CryptoInfo {
-            symbol: "USDT".to_string(),
-            name: "Tether USD (BSC)".to_string(),
-            network: "bsc".to_string(),
-            rpc_url: "https://bsc-dataseed.binance.org/".to_string(),
-            min_iq: 30,
-            exchange_rate: 0.8, // 1 akai = 0.8 USDT
-            contract_address: Some("0x55d398326f99059fF775485246999027B3197955".to_string()),
+            symbol: "SKL".to_string(),
+            name: "Skale".to_string(),
+            network: "ethereum".to_string(),
+            rpc_url: "https://cloudflare-eth.com".to_string(),
+            min_iq: 500,
+            api_id: "skale".to_string(),
+            contract_address: Some("0x00c83aecc790e8a4453e5dd3b0b4b3680501a7a7".to_string()),
+            decimals: 18,
+        },
+        CryptoInfo {
+            symbol: "POL".to_string(),
+            name: "Polygon".to_string(),
+            network: "ethereum".to_string(),
+            rpc_url: "https://cloudflare-eth.com".to_string(),
+            min_iq: 500,
+            api_id: "polygon".to_string(),
+            contract_address: Some("0x455e53CBB86018Ac2B8092FdCd39d8444aFFC3F6".to_string()),
+            decimals: 18,
+        },
+        CryptoInfo {
+            symbol: "WAVAX".to_string(),
+            name: "Wrapped AVAX".to_string(),
+            network: "avalanche".to_string(),
+            rpc_url: "https://api.avax.network/ext/bc/C/rpc".to_string(),
+            min_iq: 500,
+            api_id: "avalanche-2".to_string(),
+            contract_address: Some("0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7".to_string()),
             decimals: 18,
         },
     ]
-}
-
-/// Get all cryptos (no filtering)
-pub fn get_available_cryptos(_user_iq: usize) -> Vec<CryptoInfo> {
-    all_cryptos()
 }
 
 sol! {
@@ -84,6 +132,26 @@ sol! {
     contract ERC20 {
         function transfer(address to, uint256 amount) external returns (bool);
     }
+}
+
+/// Fetch live price from CoinGecko
+async fn fetch_live_usdt_price(api_id: &str) -> Result<f64, worker::Error> {
+    let url = format!(
+        "https://api.coingecko.com/api/v3/simple/price?ids={}&vs_currencies=usd",
+        api_id
+    );
+    let req = Request::new(&url, Method::Get)?;
+    let mut res = Fetch::Request(req).send().await?;
+    
+    if !res.status_code() == 200 {
+        return Err(worker::Error::from(format!("CoinGecko API returned status {}", res.status_code())));
+    }
+
+    let price_data: HashMap<String, CoinGeckoPrice> = res.json().await?;
+    
+    price_data.get(api_id)
+        .map(|price| price.usd)
+        .ok_or_else(|| worker::Error::from(format!("Price not found for {}", api_id)))
 }
 
 /// Send ETH using alloy
@@ -162,6 +230,31 @@ pub async fn send_erc20(
     Ok(format!("{}", pending_tx.tx_hash()))
 }
 
+/// Calculate the amount of crypto a user gets for a certain amount of Akai
+pub async fn calculate_crypto_amount(
+    akai_amount: usize,
+    user_iq: usize,
+    crypto_symbol: &str,
+) -> Result<f64, String> {
+    let cryptos = all_cryptos();
+    let crypto = cryptos
+        .iter()
+        .find(|c| c.symbol == crypto_symbol)
+        .ok_or_else(|| "Crypto not found".to_string())?;
+
+    if user_iq < crypto.min_iq {
+        return Err("User IQ is too low for this crypto".to_string());
+    }
+
+    let live_price = fetch_live_usdt_price(&crypto.api_id).await.map_err(|e| e.to_string())?;
+
+    let akai_value_in_usdt = AKAI_RATE_IN_USDT * (user_iq as f64 / 100.0);
+    let total_usdt_value = akai_amount as f64 * akai_value_in_usdt;
+    let crypto_amount = total_usdt_value / live_price;
+
+    Ok(crypto_amount)
+}
+
 /// Exchange Akai for crypto using real blockchain logic
 pub async fn exchange_akai_for_crypto_real(
     akai_amount: usize,
@@ -172,22 +265,22 @@ pub async fn exchange_akai_for_crypto_real(
     private_key: &str,
 ) -> Result<String, String> {
     worker::console_log!("Entering exchange_akai_for_crypto_real...");
-    let cryptos = get_available_cryptos(user_iq);
+    let cryptos = all_cryptos();
     let crypto = cryptos
         .iter()
         .find(|c| c.symbol == crypto_symbol && user_wallet_address.starts_with("0x"))
-        .ok_or_else(|| "Crypto not available for your IQ or invalid address".to_string())?;
+        .ok_or_else(|| "Crypto not available or invalid address".to_string())?;
+
+    if user_iq < crypto.min_iq {
+        return Err("User IQ is too low for this crypto".to_string());
+    }
     if akai_amount > user_akai_balance {
         return Err("Insufficient akai balance".to_string());
     }
-    let amount = (akai_amount as f64) * crypto.exchange_rate;
-    if amount <= 0.0 {
-        return Err("Amount too low".to_string());
-    }
-    if crypto.symbol == "ETH"
-        || crypto.symbol == "MATIC"
-        || crypto.symbol == "BNB"
-        || crypto.contract_address.is_none()
+
+    let amount = calculate_crypto_amount(akai_amount, user_iq, crypto_symbol).await?;
+
+    if crypto.contract_address.is_none()
     {
         send_eth(
             &crypto.rpc_url,
