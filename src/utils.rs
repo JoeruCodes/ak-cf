@@ -319,18 +319,17 @@ pub fn handle_user_login(user_data: &mut UserData, reward: Option<&mut Reward>) 
 
     // Check if it's been more than 1 hour AND we haven't given a reward in this hour
     if time_since_last_login >= one_hour && current_hour > last_reward_hour {
-        user_data.game_state.inventory_aliens += 30;
-        user_data.profile.real_login = current_time;
+        user_data.game_state.inventory_aliens =50;
 
         // Add to reward struct if provided
         if let Some(reward) = reward {
             reward
                 .rewards
-                .insert("inventory_aliens".to_string(), "30".to_string());
+                .insert("inventory_aliens".to_string(), "50".to_string());
         }
 
         console_log!(
-            "Hourly login reward given: +30 inventory aliens. Time since last: {} seconds",
+            "Hourly login reward given: +50 inventory aliens. Time since last: {} seconds",
             time_since_last_login
         );
     } else {

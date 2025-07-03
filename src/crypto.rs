@@ -8,7 +8,7 @@ use alloy::{
 };
 use serde::Deserialize;
 use std::collections::HashMap;
-use worker::{Fetch, Request, RequestInit, Response, Method};
+use worker::{console_log, Fetch, Method, Request, RequestInit, Response};
 
 const AKAI_RATE_IN_USDT: f64 = 0.01;
 
@@ -88,7 +88,7 @@ pub fn all_cryptos() -> Vec<CryptoInfo> {
             name: "BNB".to_string(),
             network: "bsc".to_string(),
             rpc_url: "https://bsc-dataseed.binance.org/".to_string(),
-            min_iq: 400,
+            min_iq: 30,
             api_id: "binancecoin".to_string(),
             contract_address: None,
             decimals: 18,
@@ -140,18 +140,29 @@ async fn fetch_live_usdt_price(api_id: &str) -> Result<f64, worker::Error> {
         "https://api.coingecko.com/api/v3/simple/price?ids={}&vs_currencies=usd",
         api_id
     );
+    
+    worker::console_log!("Fetching price from URL: {}", url);
+    
     let req = Request::new(&url, Method::Get)?;
     let mut res = Fetch::Request(req).send().await?;
     
-    if !res.status_code() == 200 {
-        return Err(worker::Error::from(format!("CoinGecko API returned status {}", res.status_code())));
+    worker::console_log!("CoinGecko API response status: {}", res.status_code());
+    
+    if res.status_code() != 200 {
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        worker::console_error!("CoinGecko API error response: {}", error_text);
+        return Err(worker::Error::from(format!("CoinGecko API returned status {}: {}", res.status_code(), error_text)));
     }
 
-    let price_data: HashMap<String, CoinGeckoPrice> = res.json().await?;
+    let response_text = res.text().await?;
+    worker::console_log!("CoinGecko API raw response: {}", response_text);
+    
+    let price_data: HashMap<String, CoinGeckoPrice> = serde_json::from_str(&response_text)
+        .map_err(|e| worker::Error::from(format!("Failed to parse CoinGecko response: {} - Raw response: {}", e, response_text)))?;
     
     price_data.get(api_id)
         .map(|price| price.usd)
-        .ok_or_else(|| worker::Error::from(format!("Price not found for {}", api_id)))
+        .ok_or_else(|| worker::Error::from(format!("Price not found for {} in response: {}", api_id, response_text)))
 }
 
 /// Send ETH using alloy
@@ -236,21 +247,41 @@ pub async fn calculate_crypto_amount(
     user_iq: usize,
     crypto_symbol: &str,
 ) -> Result<f64, String> {
+    worker::console_log!("Starting calculate_crypto_amount - akai_amount: {}, user_iq: {}, crypto_symbol: {}", akai_amount, user_iq, crypto_symbol);
+    
     let cryptos = all_cryptos();
     let crypto = cryptos
         .iter()
         .find(|c| c.symbol == crypto_symbol)
-        .ok_or_else(|| "Crypto not found".to_string())?;
+        .ok_or_else(|| format!("Crypto '{}' not found", crypto_symbol))?;
+
+    worker::console_log!("Found crypto: {} (min_iq: {})", crypto.symbol, crypto.min_iq);
 
     if user_iq < crypto.min_iq {
-        return Err("User IQ is too low for this crypto".to_string());
+        let error_msg = format!("User IQ ({}) is too low for {} (requires {})", user_iq, crypto_symbol, crypto.min_iq);
+        worker::console_log!("{}", error_msg);
+        return Err(error_msg);
     }
 
-    let live_price = fetch_live_usdt_price(&crypto.api_id).await.map_err(|e| e.to_string())?;
+    worker::console_log!("Fetching live price for API ID: {}", crypto.api_id);
+    let live_price = match fetch_live_usdt_price(&crypto.api_id).await {
+        Ok(price) => {
+            worker::console_log!("Successfully fetched live price: ${}", price);
+            price
+        }
+        Err(e) => {
+            let error_msg = format!("Failed to fetch price for {}: {}", crypto_symbol, e);
+            worker::console_log!("{}", error_msg);
+            return Err(error_msg);
+        }
+    };
 
     let akai_value_in_usdt = AKAI_RATE_IN_USDT * (user_iq as f64 / 100.0);
     let total_usdt_value = akai_amount as f64 * akai_value_in_usdt;
     let crypto_amount = total_usdt_value / live_price;
+
+    worker::console_log!("Calculation: {} AKAI * ${} (AKAI value) = ${} total USDT value / ${} (live price) = {} {}", 
+        akai_amount, akai_value_in_usdt, total_usdt_value, live_price, crypto_amount, crypto_symbol);
 
     Ok(crypto_amount)
 }

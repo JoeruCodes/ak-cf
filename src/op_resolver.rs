@@ -728,14 +728,22 @@ impl UserData {
             }
 
             Op::GetCryptoExchangeAmount(akai_amount, crypto_symbol) => {
+                console_log!("akai_amount: {}", akai_amount);
                 match crate::crypto::calculate_crypto_amount(*akai_amount, self.progress.iq, &crypto_symbol).await {
                     Ok(amount) => Response::ok(
                         json!({
+                            "success": true,
                             "crypto_amount": amount,
                         })
                         .to_string(),
                     ),
-                    Err(e) => Response::error(&e, 400),
+                    Err(e) => Response::ok(
+                        json!({
+                            "success": false,
+                            "error": e
+                        })
+                        .to_string(),
+                    ),
                 }
             }
 

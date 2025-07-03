@@ -54,7 +54,7 @@ impl Read {
 #[derive(Clone, Debug, PartialEq, Copy)]
 pub struct RewardConfig {
     pub akai_on_correct: usize,
-    pub akai_on_incorrect: usize,
+    pub akai_on_incorrect: isize,
     pub iq_on_correct: usize,
     pub iq_on_incorrect: isize,
 }
@@ -64,8 +64,8 @@ pub fn get_reward_config(task_type: &str) -> Option<RewardConfig> {
     map.insert(
         "mcq",
         RewardConfig {
-            akai_on_correct: 10,
-            akai_on_incorrect: 0,
+            akai_on_correct: 2,
+            akai_on_incorrect: -5,
             iq_on_correct: 5,
             iq_on_incorrect: -10,
         },
@@ -73,8 +73,8 @@ pub fn get_reward_config(task_type: &str) -> Option<RewardConfig> {
     map.insert(
         "text",
         RewardConfig {
-            akai_on_correct: 15,
-            akai_on_incorrect: 0,
+            akai_on_correct: 5,
+            akai_on_incorrect: -7,
             iq_on_correct: 7,
             iq_on_incorrect: -10,
         },
@@ -183,16 +183,16 @@ pub async fn notify_task_result(mut req: Request, env: &Env) -> Result<Response>
         if let Some(config) = get_reward_config(&user_data.task_type) {
             let (akai_reward, iq_change, message) = if is_correct {
                 (
-                    config.akai_on_correct,
+                    config.akai_on_correct as isize,
                     config.iq_on_correct as isize,
                     format!("Task '{}' correct. Keep it up!", user_data.task_type),
                 )
             } else {
                 (
                     config.akai_on_incorrect,
-                    -(config.iq_on_incorrect as isize),
+                    config.iq_on_incorrect as isize,
                     format!(
-                        "Task '{}' incorrect. This will result in loss of IQ.",
+                        "Task '{}' incorrect. This will result in loss of IQ and Akai.",
                         user_data.task_type
                     ),
                 )
